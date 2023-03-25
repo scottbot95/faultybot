@@ -96,7 +96,7 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
-    dotenv().expect(".env file not found");
+    dotenv().ok(); // ignore errors
     set_key(env::var("OPENAI_KEY").expect("OPENAI_KEY must be set"));
 
     // Initialize the logger
