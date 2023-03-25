@@ -2,12 +2,8 @@ use std::collections::HashSet;
 use std::env;
 use std::io::{stdin, stdout, Write};
 use std::sync::{Arc};
-use std::time::Duration;
 use dotenvy::dotenv;
-use openai::{
-    chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole},
-    models::ModelID
-};
+use openai::{chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole}, set_key};
 use serenity::{async_trait, Client};
 use serenity::client::bridge::gateway::ShardManager;
 use serenity::client::Context;
@@ -73,7 +69,7 @@ impl EventHandler for Handler {
                 }
             ];
 
-            let chat_completion = ChatCompletion::builder(ModelID::Gpt3_5Turbo, messages)
+            let chat_completion = ChatCompletion::builder("gpt-3.5-turbo", messages)
                 .create()
                 .await
                 .unwrap()
@@ -101,6 +97,7 @@ impl EventHandler for Handler {
 #[tokio::main]
 async fn main() {
     dotenv().expect(".env file not found");
+    set_key(env::var("OPENAI_KEY").expect("OPENAI_KEY must be set"));
 
     // Initialize the logger
     tracing_subscriber::fmt::init();
