@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 dotenvy = "0.15.6"
-openai = { git = "https://github.com/scottbot95/openai", default-features = false, features = [ "rustls" ]}
+openai = { git = "https://github.com/valentinegb/openai", default-features = false, features = [ "rustls" ]}
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 
