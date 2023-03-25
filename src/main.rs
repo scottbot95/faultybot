@@ -1,9 +1,10 @@
+mod gpt;
+
 use std::collections::HashSet;
 use std::env;
-use std::io::{stdin, stdout, Write};
 use std::sync::{Arc};
 use dotenvy::dotenv;
-use openai::{chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole}, set_key};
+use openai::set_key;
 use serenity::{async_trait, Client};
 use serenity::client::bridge::gateway::ShardManager;
 use serenity::client::Context;
@@ -16,6 +17,7 @@ use serenity::model::prelude::CurrentUser;
 use serenity::prelude::{EventHandler, GatewayIntents, TypeMapKey};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
+use crate::gpt::Chat;
 
 pub struct ShardManagerContainer;
 
@@ -56,33 +58,28 @@ impl EventHandler for Handler {
         let chat_completion = {
             let _typing = Typing::start(ctx.http.clone(), message.channel_id.0);
 
-            let messages = vec![
-                ChatCompletionMessage {
-                    role: ChatCompletionMessageRole::System,
-                    content: "You are FaultyGPT, a large language model built into a Discord bot. You are helpful, but your responses are always sassy and sometimes rude.".to_string(),
-                    name: None,
-                },
-                ChatCompletionMessage {
-                    role: ChatCompletionMessageRole::User,
-                    content: message.content.clone(),
-                    name: None,
-                }
-            ];
+            let mut chat = Chat::new("gpt-3.5-turbo", "FaultyGPT");
 
-            let chat_completion = ChatCompletion::builder("gpt-3.5-turbo", messages)
-                .create()
-                .await
-                .unwrap()
-                .unwrap();
-            chat_completion.choices.first().unwrap().message.clone()
+            let completion = chat.chat_completion(message.content.clone(), None).await;
+            match completion {
+                Ok(completion) => completion,
+                Err(err) => {
+                    error!("Failed to generate chat completion: {}", err);
+                    return;
+                }
+            }
         };
 
-        message.channel_id.send_message(&ctx, |builder| {
+        let result = message.channel_id.send_message(&ctx, |builder| {
             if message.guild_id.is_some() {
                 builder.reference_message(&message);
             }
             builder.content(chat_completion.content)
-        }).await.expect("Failed to reply to message");
+        }).await;
+
+        if let Err(err) = result {
+            error!("Failed to send reply: {}", err);
+        }
     }
 
     async fn ready(&self, _ctx: Context, ready: Ready) {
@@ -150,40 +147,4 @@ async fn main() {
     if let Err(err) = client.start().await {
         error!("Client error: {:?}", err);
     }
-
-    let mut messages = vec![ChatCompletionMessage {
-        role: ChatCompletionMessageRole::System,
-        content: "You are FaultyGPT, a large language model built into a command line interface. You are helpful, but your responses are always snarky and a bit rude.".to_string(),
-        name: None,
-    }];
-    // 
-    // loop {
-    //     print!("User: ");
-    //     stdout().flush().unwrap();
-    //
-    //     let mut user_message_content = String::new();
-    //     // let user_message_content = "Hello, what is your name?".to_string();
-    //
-    //     stdin().read_line(&mut user_message_content).unwrap();
-    //     messages.push(ChatCompletionMessage {
-    //         role: ChatCompletionMessageRole::User,
-    //         content: user_message_content,
-    //         name: None,
-    //     });
-    //
-    //     let chat_completion = ChatCompletion::builder(ModelID::Gpt3_5Turbo, messages.clone())
-    //         .create()
-    //         .await
-    //         .unwrap()
-    //         .unwrap();
-    //     let returned_message = chat_completion.choices.first().unwrap().message.clone();
-    //
-    //     println!(
-    //         "{:#?}: {}",
-    //         &returned_message.role,
-    //         &returned_message.content.trim()
-    //     );
-    //
-    //     messages.push(returned_message);
-    // }
 }
