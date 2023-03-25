@@ -38,7 +38,9 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, message: Message) {
-        if !message.mentions_me(&ctx).await.expect("Failed to read mentions") {
+        debug!("Received {:?}", message);
+
+        if message.guild_id.is_some() && !message.mentions_me(&ctx).await.expect("Failed to read mentions") {
             return
         }
 
@@ -79,9 +81,12 @@ impl EventHandler for Handler {
             chat_completion.choices.first().unwrap().message.clone()
         };
 
-        message.reply(&ctx, chat_completion.content)
-            .await
-            .expect("Failed to reply to message");
+        message.channel_id.send_message(&ctx, |builder| {
+            if message.guild_id.is_some() {
+                builder.reference_message(&message);
+            }
+            builder.content(chat_completion.content)
+        }).await.expect("Failed to reply to message");
     }
 
     async fn ready(&self, _ctx: Context, ready: Ready) {
