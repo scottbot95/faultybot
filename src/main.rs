@@ -1,34 +1,34 @@
-mod gpt;
 mod commands;
-mod handler;
 mod framework;
+mod gpt;
+mod handler;
 
-use std::collections::HashSet;
-use std::env;
-use std::sync::Arc;
+use crate::framework::build_framework;
+use crate::handler::Handler;
 use dotenvy::dotenv;
 use openai::set_key;
-use serenity::Client;
 use serenity::client::bridge::gateway::ShardManager;
 use serenity::framework::StandardFramework;
 use serenity::http::{CacheHttp, Http};
-use serenity::model::prelude::CurrentUser;
+use serenity::model::prelude::{CurrentUser, User};
 use serenity::prelude::{GatewayIntents, TypeMapKey};
+use serenity::Client;
+use std::collections::HashSet;
+use std::env;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::error;
-use crate::framework::build_framework;
-use crate::handler::Handler;
 
 pub struct ShardManagerContainer;
 
-impl TypeMapKey for ShardManagerContainer { 
-    type Value = Arc<Mutex<ShardManager>>; 
+impl TypeMapKey for ShardManagerContainer {
+    type Value = Arc<Mutex<ShardManager>>;
 }
 
 pub struct BotInfoContainer;
 
 impl TypeMapKey for BotInfoContainer {
-    type Value = CurrentUser;
+    type Value = User;
 }
 
 #[tokio::main]
@@ -44,8 +44,7 @@ async fn main() {
     // create the framework
     let framework = build_framework(&discord_token).await;
 
-    let intents = GatewayIntents::non_privileged() |
-        GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = build_client(&discord_token, framework, intents)
         .await
         .expect("Error creating client");
@@ -53,7 +52,9 @@ async fn main() {
     let shard_manager = client.shard_manager.clone();
 
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register ctrl+c handler");
         shard_manager.lock().await.shutdown_all().await;
     });
 
@@ -65,23 +66,23 @@ async fn main() {
 async fn build_client(
     token: &str,
     framework: StandardFramework,
-    intents: GatewayIntents
+    intents: GatewayIntents,
 ) -> Result<serenity::Client, serenity::Error> {
-    let client = Client::builder(token ,intents)
+    let client = Client::builder(token, intents)
         .event_handler(Handler)
         .framework(framework)
         .await?;
 
-    let bot_id = match client.cache_and_http.http.get_current_user().await {
-        Ok(bot_id) => bot_id,
-        Err(err) => panic!("Could not access the bot id: {:?}", err)
+    let bot_user = match client.cache_and_http.http.get_current_user().await {
+        Ok(bot_user) => bot_user,
+        Err(err) => panic!("Could not access the bot id: {:?}", err),
     };
 
     // Initialize client context
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<BotInfoContainer>(bot_id);
+        data.insert::<BotInfoContainer>(bot_user.into());
     }
 
     Ok(client)
