@@ -9,11 +9,10 @@ use dotenvy::dotenv;
 use openai::set_key;
 use serenity::client::bridge::gateway::ShardManager;
 use serenity::framework::StandardFramework;
-use serenity::http::{CacheHttp, Http};
-use serenity::model::prelude::{CurrentUser, User};
+use serenity::model::prelude::User;
 use serenity::prelude::{GatewayIntents, TypeMapKey};
 use serenity::Client;
-use std::collections::HashSet;
+
 use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;

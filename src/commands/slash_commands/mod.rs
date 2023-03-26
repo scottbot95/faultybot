@@ -1,14 +1,14 @@
 mod ping;
 
-use std::str::FromStr;
 use serenity::async_trait;
 use serenity::builder::{CreateApplicationCommand, CreateEmbed};
 use serenity::model::prelude::interaction::application_command::ApplicationCommandInteraction;
 use serenity::prelude::Context;
+use std::str::FromStr;
 
 pub enum SlashCommandResult {
     Simple(Option<String>),
-    Embed(CreateEmbed)
+    Embed(CreateEmbed),
 }
 
 #[async_trait]
@@ -25,10 +25,10 @@ impl SlashCommands {
     pub async fn run(
         &self,
         ctx: &Context,
-        command: &ApplicationCommandInteraction
+        command: &ApplicationCommandInteraction,
     ) -> SlashCommandResult {
         match self {
-            SlashCommands::Ping => ping::Ping::run(ctx, command).await
+            SlashCommands::Ping => ping::Ping::run(ctx, command).await,
         }
     }
 
@@ -37,7 +37,7 @@ impl SlashCommands {
         command: &'a mut CreateApplicationCommand,
     ) -> &'a mut CreateApplicationCommand {
         match self {
-            SlashCommands::Ping => ping::Ping::register(command)
+            SlashCommands::Ping => ping::Ping::register(command),
         }
     }
 }
@@ -48,7 +48,7 @@ impl FromStr for SlashCommands {
     fn from_str(command: &str) -> Result<Self, Self::Err> {
         match command {
             "ping" => Ok(Self::Ping),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }

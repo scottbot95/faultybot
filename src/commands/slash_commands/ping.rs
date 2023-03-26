@@ -1,8 +1,8 @@
+use crate::commands::slash_commands::{SlashCommand, SlashCommandResult};
 use serenity::async_trait;
 use serenity::builder::CreateApplicationCommand;
 use serenity::client::Context;
 use serenity::model::application::interaction::application_command::ApplicationCommandInteraction;
-use crate::commands::slash_commands::{SlashCommand, SlashCommandResult};
 
 pub(crate) struct Ping;
 
