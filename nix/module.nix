@@ -22,6 +22,7 @@ with lib;
       """;
       example = "/run/secrets/faultybot.env";
     };
+    ansi_colors = mkEnableOption "ANSI colors in log output";
   };
 
   config = mkIf cfg.enable {
@@ -36,8 +37,12 @@ with lib;
       serviceConfig = {
         DynamicUser = true;
         ExecStart = "${cfg.package}/bin/faultybot";
-        EnvironmentFile = "-${cfg.envfile}";
+        EnvironmentFile = "${cfg.envfile}";
         Restart = "always";
+      };
+
+      environment = {
+        ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
       };
     };
   };

@@ -35,8 +35,17 @@ async fn main() {
     dotenv().ok(); // ignore errors
     set_key(env::var("OPENAI_KEY").expect("OPENAI_KEY must be set"));
 
+    let ansi_colors = env::var("ANSI_COLORS").map(|var| var.to_lowercase());
+    let with_ansi = if let Ok(var) = ansi_colors {
+        var != "false"
+    } else {
+        true
+    };
+
     // Initialize the logger
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_ansi(with_ansi)
+        .init();
 
     let discord_token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
 
