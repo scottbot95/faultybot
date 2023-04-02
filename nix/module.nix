@@ -55,7 +55,7 @@ with lib;
 
       environment = {
         ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
-        METRICS_LISTEN_ADDRESS = "${cfg.metrics.listenAddress}:${cfg.metrics.port}";
+        METRICS_LISTEN_ADDRESS = "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
       };
     };
   };
