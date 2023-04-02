@@ -1,3 +1,4 @@
+use std::error::Error;
 use crate::commands::slash_commands::{SlashCommandResult, SlashCommands};
 use crate::gpt::Chat;
 use crate::BotInfoContainer;
@@ -8,6 +9,8 @@ use serenity::model::prelude::command::Command;
 use serenity::model::prelude::{Message, Ready, ResumedEvent};
 use serenity::prelude::{Context, EventHandler};
 use std::str::FromStr;
+use metrics::{histogram, increment_counter};
+use tokio::time::Instant;
 use tracing::{debug, error, info};
 
 pub(crate) struct Handler;
@@ -38,36 +41,20 @@ impl EventHandler for Handler {
             .author_nick(&ctx)
             .await
             .unwrap_or_else(|| message.author.name.clone());
-        debug!("Received message from {}: `{}`", author, &message.content);
 
-        let chat_completion = {
-            let _typing = Typing::start(ctx.http.clone(), message.channel_id.0);
+        let start = Instant::now();
 
-            let mut chat = Chat::from(&ctx, "gpt-3.5-turbo", &message).await;
-
-            let completion = chat.completion().await;
-            match completion {
-                Ok(completion) => completion,
-                Err(err) => {
-                    error!("Failed to generate chat completion: {}", err);
-                    return;
-                }
-            }
-        };
-
-        let result = message
-            .channel_id
-            .send_message(&ctx, |builder| {
-                if message.guild_id.is_some() {
-                    builder.reference_message(&message);
-                }
-                builder.content(chat_completion.content)
-            })
-            .await;
+        let result = Self::reply_with_gpt_completion(&ctx, &message, author).await;
 
         if let Err(err) = result {
+            increment_counter!("faultybot_errors_total");
             error!("Failed to send reply: {}", err);
+        } else {
+            increment_counter!("faultybot_gpt_responses_total");
         }
+
+        let duration = start.elapsed();
+        histogram!("faultybot_gpt_response_seconds", duration.as_secs_f64());
     }
 
     async fn ready(&self, ctx: Context, ready: Ready) {
@@ -149,5 +136,31 @@ impl EventHandler for Handler {
                 }
             }
         }
+    }
+}
+
+impl Handler {
+    async fn reply_with_gpt_completion(ctx: &Context, message: &Message, author: String) -> Result<Message, Box<dyn Error>> {
+        increment_counter!("faultybot_gpt_requests_total");
+        debug!("Received message from {}: `{}`", author, &message.content);
+
+        let chat_completion = {
+            let _typing = Typing::start(ctx.http.clone(), message.channel_id.0);
+
+            let mut chat = Chat::from(&ctx, "gpt-3.5-turbo", &message).await;
+
+            chat.completion().await?
+        };
+
+        let result = message
+            .channel_id
+            .send_message(&ctx, |builder| {
+                if message.guild_id.is_some() {
+                    builder.reference_message(message);
+                }
+                builder.content(chat_completion.content)
+            })
+            .await?;
+        Ok(result)
     }
 }

@@ -23,6 +23,18 @@ with lib;
       example = "/run/secrets/faultybot.env";
     };
     ansi_colors = mkEnableOption "ANSI colors in log output";
+    metrics = {
+      listenAddress = mkOption {
+        type = types.str;
+        description = mdDoc "Listen address to bind prometheus exporter to";
+        default = "0.0.0.0";
+      };
+      port = mkOption {
+        type = types.port;
+        description = mdDoc "Port to lisen on";
+        default = 9000;
+      };
+    };
   };
 
   config = mkIf cfg.enable {
@@ -43,6 +55,7 @@ with lib;
 
       environment = {
         ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
+        METRICS_LISTEN_ADDRESS = "${cfg.metrics.listenAddress}:${cfg.metrics.port}";
       };
     };
   };

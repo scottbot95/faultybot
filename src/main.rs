@@ -2,6 +2,7 @@ mod commands;
 mod framework;
 mod gpt;
 mod handler;
+mod metrics;
 
 use crate::framework::build_framework;
 use crate::handler::Handler;
@@ -17,6 +18,7 @@ use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::error;
+use crate::metrics::init_metrics;
 
 pub struct ShardManagerContainer;
 
@@ -46,6 +48,8 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_ansi(with_ansi)
         .init();
+
+    init_metrics();
 
     let discord_token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
 
