@@ -24,6 +24,7 @@ with lib;
     };
     ansi_colors = mkEnableOption "ANSI colors in log output";
     metrics = {
+      enable = mkEnableOption "prometheus metric exporter";
       listenAddress = mkOption {
         type = types.str;
         description = mdDoc "Listen address to bind prometheus exporter to";
@@ -55,8 +56,11 @@ with lib;
 
       environment = {
         ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
-        METRICS_LISTEN_ADDRESS = "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
+        METRICS_LISTEN_ADDRESS = mkIf cfg.metrics.enable "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
       };
+
     };
+
+    networking.firewall.allowedTCPPorts = mkIf cfg.metrics.enable [ cfg.metrics.port ];
   };
 }
