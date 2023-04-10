@@ -16,9 +16,10 @@ use serenity::Client;
 
 use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::error;
-use crate::metrics::init_metrics;
+use crate::metrics::{init_metrics, periodic_metrics};
 
 pub struct ShardManagerContainer;
 
@@ -69,6 +70,8 @@ async fn main() {
             .expect("Could not register ctrl+c handler");
         shard_manager.lock().await.shutdown_all().await;
     });
+
+    periodic_metrics(client.cache_and_http.clone(), Duration::from_secs(60));
 
     if let Err(err) = client.start().await {
         error!("Client error: {:?}", err);
