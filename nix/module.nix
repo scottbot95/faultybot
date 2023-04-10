@@ -24,16 +24,31 @@ with lib;
     };
     ansi_colors = mkEnableOption "ANSI colors in log output";
     metrics = {
-      enable = mkEnableOption "prometheus metric exporter";
-      listenAddress = mkOption {
-        type = types.str;
-        description = mdDoc "Listen address to bind prometheus exporter to";
-        default = "0.0.0.0";
+      statsd = {
+        enable = mkEnableOption "statsd metrics exporter";
+        host = mkOption {
+          type = types.str;
+          description = "Host to send statsd updates to.";
+          example = "127.0.0.1";
+        };
+        port = mkOption {
+          type = types.port;
+          description = "Port on `host` to send metrics to.";
+          default = 8125;
+        };
       };
-      port = mkOption {
-        type = types.port;
-        description = mdDoc "Port to lisen on";
-        default = 9000;
+      prometheus = {
+        enable = mkEnableOption "prometheus metric exporter";
+        listenAddress = mkOption {
+          type = types.str;
+          description = mdDoc "Listen address to bind prometheus exporter to";
+          default = "0.0.0.0";
+        };
+        port = mkOption {
+          type = types.port;
+          description = mdDoc "Port to lisen on";
+          default = 9000;
+        };
       };
     };
   };
@@ -56,11 +71,18 @@ with lib;
 
       environment = {
         ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
-        METRICS_LISTEN_ADDRESS = mkIf cfg.metrics.enable "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
+        METRICS_LISTEN_ADDRESS = mkIf cfg.metrics.prometheus.enable "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
+        STATSD_HOST = mkIf cfg.metrics.statsd.enable cfg.metrics.statsd.host;
+        STATSD_PORT = mkIf cfg.metrics.statsd.enable (toString cfg.metrics.statsd.port);
       };
 
     };
 
-    networking.firewall.allowedTCPPorts = mkIf cfg.metrics.enable [ cfg.metrics.port ];
+    networking.firewall.allowedTCPPorts = mkIf cfg.metrics.prometheus.enable [ cfg.metrics.port ];
+
+    assertions = [{
+      assertion = !(cfg.metrics.prometheus.enable && cfg.metrics.statsd.enable);
+      message = "Cannot enable both prometheus and statsd recorders";
+    }];
   };
 }
