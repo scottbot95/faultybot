@@ -47,14 +47,14 @@ impl EventHandler for Handler {
         let result = Self::reply_with_gpt_completion(&ctx, &message, author).await;
 
         if let Err(err) = result {
-            increment_counter!("faultybot_errors_total");
+            increment_counter!("errors_total");
             error!("Failed to send reply: {}", err);
         } else {
-            increment_counter!("faultybot_gpt_responses_total");
+            increment_counter!("gpt_responses_total");
         }
 
         let duration = start.elapsed();
-        histogram!("faultybot_gpt_response_seconds", duration.as_secs_f64());
+        histogram!("gpt_response_seconds", duration.as_secs_f64());
     }
 
     async fn ready(&self, ctx: Context, ready: Ready) {
@@ -141,7 +141,7 @@ impl EventHandler for Handler {
 
 impl Handler {
     async fn reply_with_gpt_completion(ctx: &Context, message: &Message, author: String) -> Result<Message, Box<dyn Error>> {
-        increment_counter!("faultybot_gpt_requests_total");
+        increment_counter!("gpt_requests_total");
         debug!("Received message from {}: `{}`", author, &message.content);
 
         let chat_completion = {
