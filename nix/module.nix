@@ -71,14 +71,14 @@ with lib;
 
       environment = {
         ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
-        METRICS_LISTEN_ADDRESS = mkIf cfg.metrics.prometheus.enable "${cfg.metrics.listenAddress}:${toString cfg.metrics.port}";
+        METRICS_LISTEN_ADDRESS = mkIf cfg.metrics.prometheus.enable "${cfg.metrics.prometheus.listenAddress}:${toString cfg.metrics.prometheus.port}";
         STATSD_HOST = mkIf cfg.metrics.statsd.enable cfg.metrics.statsd.host;
         STATSD_PORT = mkIf cfg.metrics.statsd.enable (toString cfg.metrics.statsd.port);
       };
 
     };
 
-    networking.firewall.allowedTCPPorts = mkIf cfg.metrics.prometheus.enable [ cfg.metrics.port ];
+    networking.firewall.allowedTCPPorts = mkIf cfg.metrics.prometheus.enable [ cfg.metrics.prometheus.port ];
 
     assertions = [{
       assertion = !(cfg.metrics.prometheus.enable && cfg.metrics.statsd.enable);
