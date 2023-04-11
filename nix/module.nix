@@ -2,6 +2,7 @@
 { config, lib, pkgs, ...}:
 let 
   cfg = config.services.faultybot;
+  promCfg = config.services.prometheus.exporters.faultybot;
 in
 with lib; 
 {
@@ -37,19 +38,27 @@ with lib;
           default = 8125;
         };
       };
-      prometheus = {
-        enable = mkEnableOption "prometheus metric exporter";
-        listenAddress = mkOption {
-          type = types.str;
-          description = mdDoc "Listen address to bind prometheus exporter to";
-          default = "0.0.0.0";
-        };
-        port = mkOption {
-          type = types.port;
-          description = mdDoc "Port to lisen on";
-          default = 9000;
-        };
-      };
+    };
+  };
+
+  options.services.prometheus.exporters.faultybot = {
+    enable = mkEnableOption "FaultyBot Prometheus exporter";
+    listenAddress = mkOption {
+      type = types.str;
+      description = mdDoc "Listen address to bind prometheus exporter to";
+      default = "0.0.0.0";
+    };
+    port = mkOption {
+      type = types.port;
+      description = mdDoc "Port to lisen on";
+      default = 9000;
+    };
+    openFirewall = mkOption {
+      type = types.bool;
+      default = false;
+      description = lib.mdDoc ''
+        Open port in firewall for incoming connections.
+      '';
     };
   };
 
@@ -71,17 +80,17 @@ with lib;
 
       environment = {
         ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
-        METRICS_LISTEN_ADDRESS = mkIf cfg.metrics.prometheus.enable "${cfg.metrics.prometheus.listenAddress}:${toString cfg.metrics.prometheus.port}";
+        METRICS_LISTEN_ADDRESS = mkIf promCfg.enable "${promCfg.listenAddress}:${toString promCfg.port}";
         STATSD_HOST = mkIf cfg.metrics.statsd.enable cfg.metrics.statsd.host;
         STATSD_PORT = mkIf cfg.metrics.statsd.enable (toString cfg.metrics.statsd.port);
       };
 
     };
 
-    networking.firewall.allowedTCPPorts = mkIf cfg.metrics.prometheus.enable [ cfg.metrics.prometheus.port ];
+    networking.firewall.allowedTCPPorts = mkIf (promCfg.enable && promCfg.openFirewall) [ promCfg.port ];
 
     assertions = [{
-      assertion = !(cfg.metrics.prometheus.enable && cfg.metrics.statsd.enable);
+      assertion = !(promCfg.enable && cfg.metrics.statsd.enable);
       message = "Cannot enable both prometheus and statsd recorders";
     }];
   };
