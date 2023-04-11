@@ -89,7 +89,7 @@ fn install_statsd_recorder() -> Result<bool, Box<dyn Error>> {
 
     let recorder = StatsdBuilder::from(host, port)
         .histogram_is_timer()
-        .build(None)?;
+        .build(Some("faultybot"))?;
 
     metrics::set_boxed_recorder(Box::new(recorder))?;
 
