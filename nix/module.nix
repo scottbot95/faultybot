@@ -74,7 +74,7 @@ with lib;
       serviceConfig = {
         DynamicUser = true;
         ExecStart = "${cfg.package}/bin/faultybot";
-        EnvironmentFile = "${cfg.envfile}";
+        EnvironmentFile = "-${cfg.envfile}";
         Restart = "always";
       };
 
