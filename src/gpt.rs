@@ -1,10 +1,10 @@
-use crate::BotInfoContainer;
 use async_recursion::async_recursion;
 use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
-use serenity::model::prelude::{GuildId, Message};
-use serenity::prelude::Context;
-use std::error::Error;
 use tracing::debug;
+
+use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{Context, GuildId, Message};
+use crate::Error;
 
 pub struct Chat {
     model: String,
@@ -53,7 +53,7 @@ impl Chat {
             }
         }
 
-        let bot_id = ctx.data.read().await.get::<BotInfoContainer>().unwrap().id;
+        let bot_id = ctx.cache.current_user_id();
 
         let (role, name) = if message.author.id == bot_id {
             (ChatCompletionMessageRole::Assistant, None)
@@ -73,7 +73,7 @@ impl Chat {
         });
     }
 
-    pub async fn completion(&mut self) -> Result<ChatCompletionMessage, Box<dyn Error>> {
+    pub async fn completion(&mut self) -> Result<ChatCompletionMessage, Error> {
         let completion = ChatCompletion::builder(&self.model, self.messages.clone())
             .create()
             .await??;
@@ -87,13 +87,7 @@ impl Chat {
 }
 
 async fn bot_name(ctx: &Context, guild_id: Option<GuildId>) -> String {
-    let user = ctx
-        .data
-        .read()
-        .await
-        .get::<BotInfoContainer>()
-        .unwrap()
-        .clone();
+    let user: serenity::User = ctx.cache.current_user().into();
 
     match guild_id {
         Some(guild_id) => user.nick_in(ctx, guild_id).await.unwrap_or(user.name),

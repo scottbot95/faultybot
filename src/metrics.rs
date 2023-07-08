@@ -3,11 +3,11 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use metrics::{describe_counter, describe_gauge, describe_histogram, gauge, histogram, NoopRecorder, register_gauge};
+use metrics::{describe_counter, describe_histogram,histogram, NoopRecorder};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_statsd::StatsdBuilder;
 use metrics_util::MetricKindMask;
-use serenity::CacheAndHttp;
+use poise::serenity_prelude as serenity;
 use tokio::time;
 use tracing::{info, warn};
 
@@ -26,14 +26,14 @@ pub(crate) fn init_metrics() {
 }
 
 /// Periodically emit metrics about bot state
-pub(crate) fn periodic_metrics(cache_and_http: Arc<CacheAndHttp>, period: Duration) {
+pub(crate) fn periodic_metrics(cache: Arc<serenity::Cache>, period: Duration) {
     tokio::spawn(async move {
         let mut interval = time::interval(period);
 
         loop {
             interval.tick().await;
 
-            let guild_count = cache_and_http.cache.guild_count();
+            let guild_count = cache.guild_count();
             histogram!("guilds_in_cache", guild_count as f64);
         }
     });

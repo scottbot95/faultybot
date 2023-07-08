@@ -1,37 +1,24 @@
 mod commands;
-mod framework;
 mod gpt;
 mod handler;
 mod metrics;
 
-use crate::framework::build_framework;
-use crate::handler::Handler;
 use dotenvy::dotenv;
 use openai::set_key;
-use serenity::client::bridge::gateway::ShardManager;
-use serenity::framework::StandardFramework;
-use serenity::model::prelude::User;
-use serenity::prelude::{GatewayIntents, TypeMapKey};
-use serenity::Client;
 
 use std::env;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tracing::error;
+use crate::commands::help;
 use crate::metrics::{init_metrics, periodic_metrics};
 
-pub struct ShardManagerContainer;
+use poise::serenity_prelude as serenity;
 
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
-pub struct BotInfoContainer;
-
-impl TypeMapKey for BotInfoContainer {
-    type Value = User;
-}
+// Custom user data passed to all command functions
+pub struct Data {}
 
 #[tokio::main]
 async fn main() {
@@ -54,15 +41,32 @@ async fn main() {
 
     let discord_token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
 
-    // create the framework
-    let framework = build_framework(&discord_token).await;
-
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    let mut client = build_client(&discord_token, framework, intents)
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![help()],
+            event_handler: |ctx, event, framework, data| Box::pin(async move {
+                handler::Handler::handle_event(ctx, event, framework, data).await
+            }),
+            prefix_options: poise::PrefixFrameworkOptions {
+                mention_as_prefix: false, // Disable mentions since we handle those directly
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .token(discord_token)
+        .intents(serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT)
+        .setup(|ctx, _ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(Data {})
+            })
+        })
+        .build()
         .await
-        .expect("Error creating client");
+        .expect("Failed to create Poise Framework");
 
-    let shard_manager = client.shard_manager.clone();
+
+    let shard_manager = framework.shard_manager().clone();
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
@@ -71,34 +75,9 @@ async fn main() {
         shard_manager.lock().await.shutdown_all().await;
     });
 
-    periodic_metrics(client.cache_and_http.clone(), Duration::from_secs(60));
+    periodic_metrics(framework.client().cache_and_http.cache.clone(), Duration::from_secs(60));
 
-    if let Err(err) = client.start().await {
-        error!("Client error: {:?}", err);
+    if let Err(err) = framework.start().await {
+        error!("Poise framework error: {:?}", err);
     }
-}
-
-async fn build_client(
-    token: &str,
-    framework: StandardFramework,
-    intents: GatewayIntents,
-) -> Result<serenity::Client, serenity::Error> {
-    let client = Client::builder(token, intents)
-        .event_handler(Handler)
-        .framework(framework)
-        .await?;
-
-    let bot_user = match client.cache_and_http.http.get_current_user().await {
-        Ok(bot_user) => bot_user,
-        Err(err) => panic!("Could not access the bot id: {:?}", err),
-    };
-
-    // Initialize client context
-    {
-        let mut data = client.data.write().await;
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<BotInfoContainer>(bot_user.into());
-    }
-
-    Ok(client)
 }
