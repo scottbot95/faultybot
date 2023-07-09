@@ -2,23 +2,27 @@ mod commands;
 mod gpt;
 mod handler;
 mod metrics;
+mod error;
 
 use dotenvy::dotenv;
 use openai::set_key;
 
 use std::env;
+use std::ops::DerefMut;
 use std::time::Duration;
 use tracing::error;
 use crate::commands::help;
 use crate::metrics::{init_metrics, periodic_metrics};
 
-use poise::serenity_prelude as serenity;
+use poise::{CooldownConfig, serenity_prelude as serenity};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 // Custom user data passed to all command functions
-pub struct Data {}
+pub struct Data {
+    handler: handler::Handler,
+}
 
 #[tokio::main]
 async fn main() {
@@ -44,8 +48,10 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![help()],
-            event_handler: |ctx, event, framework, data| Box::pin(async move {
-                handler::Handler::handle_event(ctx, event, framework, data).await
+            event_handler: |ctx, event, framework, data: &Data| Box::pin(async move {
+                data.handler.handle_event(ctx, event, framework, data).await?;
+
+                Ok(())
             }),
             prefix_options: poise::PrefixFrameworkOptions {
                 mention_as_prefix: false, // Disable mentions since we handle those directly
@@ -58,7 +64,13 @@ async fn main() {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                Ok(Data {
+                    handler: handler::Handler::new(CooldownConfig {
+                        user: Some(Duration::from_secs(10)),
+                        guild: Some(Duration::from_secs(5)),
+                        ..Default::default()
+                    }),
+                })
             })
         })
         .build()
