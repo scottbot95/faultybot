@@ -3,14 +3,14 @@ mod gpt;
 mod handler;
 mod metrics;
 mod error;
+mod database;
 
 use dotenvy::dotenv;
 use openai::set_key;
 
 use std::env;
-use std::ops::DerefMut;
 use std::time::Duration;
-use tracing::error;
+use tracing::{error, info};
 use crate::commands::help;
 use crate::metrics::{init_metrics, periodic_metrics};
 
@@ -22,6 +22,7 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 // Custom user data passed to all command functions
 pub struct Data {
     handler: handler::Handler,
+    db: database::Database,
 }
 
 #[tokio::main]
@@ -42,6 +43,12 @@ async fn main() {
         .init();
 
     init_metrics();
+
+    info!("Connecting to database...");
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db = database::Database::connect(db_url).await.expect("Failed to connect to database");
+    db.migrate().await.expect("Failed to update db to latest schema");
+    info!("Database is connected and up-to-date");
 
     let discord_token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
 
@@ -65,6 +72,7 @@ async fn main() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
+                    db,
                     handler: handler::Handler::new(CooldownConfig {
                         user: Some(Duration::from_secs(10)),
                         guild: Some(Duration::from_secs(5)),

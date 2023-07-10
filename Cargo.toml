@@ -5,6 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = [".", "entities", "migration"]
+
+[workspace.dependencies]
+sea-orm = "0.11.3"
+
 [dependencies]
 async-recursion = "1.0.4"
 derive_more = "0.99.17"
@@ -13,8 +19,11 @@ metrics = "0.21.0"
 metrics-exporter-statsd = "0.5.0"
 metrics-util = "0.15.0"
 tracing = "0.1.37"
-tracing-subscriber = "0.3.16"
+tracing-subscriber = "0.3.17"
 lazy_static = "1.4.0"
+
+entities = { path = "entities" }
+migration = { path = "migration" }
 
 [dependencies.metrics-exporter-prometheus]
 version = "0.12.0"
@@ -30,13 +39,13 @@ version = "1.0.0-alpha.8"
 default_features = false
 features = [ "rustls" ]
 
+[dependencies.sea-orm]
+workspace = true
+features = [ "sqlx-postgres", "runtime-tokio-rustls" ]
+
 [dependencies.tokio]
 version = "1.26.0"
 features = [ "macros", "signal", "rt-multi-thread" ]
-
-#[dependencies.serenity]
-#version = "0.11.5"
-#features = [ "cache", "framework", "standard_framework", "rustls_backend" ]
 
 [dependencies.reqwest]
 version = "0.11.14"
