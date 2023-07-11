@@ -1,10 +1,11 @@
 { flake }:
 { config, lib, pkgs, ...}:
+with lib;
 let 
   cfg = config.services.faultybot;
   promCfg = config.services.prometheus.exporters.faultybot;
+  faultybotConfig = builtins.toFile "faultybot.yaml" (lib.generators.toYAML {} cfg.settings);
 in
-with lib; 
 {
   options.services.faultybot = {
     enable = mkEnableOption "FaultyBot chat bot";
@@ -30,7 +31,7 @@ with lib;
         host = mkOption {
           type = types.str;
           description = "Host to send statsd updates to.";
-          example = "127.0.0.1";
+          default = "127.0.0.1";
         };
         port = mkOption {
           type = types.port;
@@ -38,6 +39,11 @@ with lib;
           default = 8125;
         };
       };
+    };
+    settings = mkOption {
+      type = (pkgs.formats.yaml { }).type;
+      default = { };
+      description = "Additional settings to be included the generated config file";
     };
   };
 
@@ -63,6 +69,15 @@ with lib;
   };
 
   config = mkIf cfg.enable {
+    services.faultybot.settings = {
+      ansi.colors = mkIf (!cfg.ansi_colors) "false";
+      prometheus.listen = mkIf promCfg.enable "${promCfg.listenAddress}:${toString promCfg.port}";
+      statsd = mkIf cfg.metrics.statsd.enable {
+        host = cfg.metrics.statsd.host;
+        port = toString cfg.metrics.statsd.port;
+      };
+    };
+
     systemd.services.faultybot = {
       description = "FaultyBot chat bot";
 
@@ -73,18 +88,10 @@ with lib;
 
       serviceConfig = {
         DynamicUser = true;
-        ExecStart = "${cfg.package}/bin/faultybot";
+        ExecStart = "${cfg.package}/bin/faultybot -c ${faultybotConfig}";
         EnvironmentFile = "-${cfg.envfile}";
         Restart = "always";
       };
-
-      environment = {
-        ANSI_COLORS = mkIf (!cfg.ansi_colors) "false";
-        METRICS_LISTEN_ADDRESS = mkIf promCfg.enable "${promCfg.listenAddress}:${toString promCfg.port}";
-        STATSD_HOST = mkIf cfg.metrics.statsd.enable cfg.metrics.statsd.host;
-        STATSD_PORT = mkIf cfg.metrics.statsd.enable (toString cfg.metrics.statsd.port);
-      };
-
     };
 
     networking.firewall.allowedTCPPorts = mkIf (promCfg.enable && promCfg.openFirewall) [ promCfg.port ];

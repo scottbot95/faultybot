@@ -2,9 +2,9 @@ use async_recursion::async_recursion;
 use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
 use tracing::debug;
 
+use crate::Error;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Context, GuildId, Message};
-use crate::Error;
 
 pub struct Chat {
     model: String,

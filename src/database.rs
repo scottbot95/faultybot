@@ -1,6 +1,6 @@
-use tracing::log::LevelFilter;
-use migration::MigratorTrait;
 use crate::Error;
+use migration::MigratorTrait;
+use tracing::log::LevelFilter;
 
 pub struct Database {
     connection: sea_orm::DatabaseConnection,
@@ -13,9 +13,7 @@ impl Database {
 
         let connection = sea_orm::Database::connect(opts).await?;
 
-        Ok(Database {
-            connection,
-        })
+        Ok(Database { connection })
     }
 
     pub async fn migrate(&self) -> Result<(), Error> {
@@ -23,4 +21,3 @@ impl Database {
         Ok(())
     }
 }
-
