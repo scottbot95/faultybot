@@ -34,8 +34,15 @@ let
   faultybot = craneLib.buildPackage {
     inherit cargoArtifacts src buildInputs nativeBuildInputs;
   };
+
+  faultybot-docker = pkgs.dockerTools.buildImage {
+    name = "faultybot";
+    config = {
+      Cmd = [ "${faultybot}/bin/faultybot" ];
+    };
+  };
 in {
-  inherit faultybot;
+  inherit faultybot faultybot-docker;
 
   default = faultybot;
 }
