@@ -2,6 +2,7 @@ use config::{Config, ConfigError, Environment, File, Map, Source, Value};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::num::NonZeroU16;
 use std::path::PathBuf;
 
 pub trait Settings {}
@@ -13,7 +14,13 @@ pub(crate) struct Ansi {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct Database {
-    pub(crate) url: String,
+    pub(crate) url: Option<String>,
+    pub(crate) host: Option<String>,
+    pub(crate) port: Option<NonZeroU16>,
+    pub(crate) name: Option<String>,
+    pub(crate) user: Option<String>,
+    pub(crate) password: Option<String>,
+    pub(crate) params: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]

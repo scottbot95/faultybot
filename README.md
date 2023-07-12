@@ -17,12 +17,13 @@ you will need to either set `openai.key` in the `faultybot.yaml` file or the `OP
 ### Discord
 
 Please follow [the Discord docs](https://discord.com/developers/docs/getting-started) for creating a bot to
-acquire the Discrd API token. Similarly once acquired either pass that in using `discord.token` or `DISCORD_TOKEN`.
+acquire the Discord API token. Similarly, once acquired either pass that in using `discord.token` or `DISCORD_TOKEN`.
 
 ### PostgresQL
 
 FaultyBot also uses a PostgreSQL 15+ server for managing persistent data.
-Once the server is setup and a database created, pass the connection string via `database.url` or `DATABASE_URL`. 
+Once the server is setup and a database created, pass the connection string via `database.url` or `DATABASE_URL`.
+Alternatively you can set the components of the connection string individually via `database.host`, `database.name`, etc...
 
 Examples for setting up postgres are detailed below.
 
