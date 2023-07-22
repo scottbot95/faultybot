@@ -5,17 +5,16 @@ use tracing::{debug, error, info, warn};
 
 use crate::error::CooldownError;
 use crate::{Data, Error};
-use poise::{serenity_prelude as serenity, Cooldowns};
-use tokio::sync::RwLock;
+use poise::{serenity_prelude as serenity};
 
 pub(crate) struct Handler {
-    cooldowns: RwLock<Cooldowns>,
+    // cooldowns: RwLock<Cooldowns<Data, Error>>,
 }
 
 impl Handler {
     pub fn new(config: poise::CooldownConfig) -> Self {
         Self {
-            cooldowns: RwLock::new(Cooldowns::new(config)),
+            // cooldowns: RwLock::new(Cooldowns::new(config)),
         }
     }
 
@@ -71,14 +70,20 @@ impl Handler {
         }
 
         {
-            let time_remaining = self
-                .cooldowns
-                .read()
-                .await
-                .remaining_cooldown(new_message.into());
-            if let Some(time_remaining) = time_remaining {
-                return Err(CooldownError::new(time_remaining).into());
-            }
+            // let time_remaining = self
+            //     .cooldowns
+            //     .read()
+            //     .await
+            //     .remaining_cooldown(CooldownContext {
+            //         user_id: new_message.author.id,
+            //         guild_id: new_message.guild_id,
+            //         channel_id: new_message.channel_id,
+            //         user_data: framework.user_data,
+            //     })
+            //     .await?;
+            // if let Some(time_remaining) = time_remaining {
+            //     return Err(CooldownError::new(time_remaining).into());
+            // }
         }
 
         let start = Instant::now();
@@ -96,10 +101,15 @@ impl Handler {
         histogram!("gpt_response_seconds", duration.as_secs_f64());
 
         {
-            self.cooldowns
-                .write()
-                .await
-                .start_cooldown(new_message.into());
+            // self.cooldowns
+            //     .write()
+            //     .await
+            //     .start_cooldown(CooldownContext {
+            //         user_id: new_message.author.id,
+            //         guild_id: new_message.guild_id,
+            //         channel_id: new_message.channel_id,
+            //         user_data: framework.user_data,
+            //     });
         }
 
         Ok(())
@@ -126,15 +136,19 @@ impl Handler {
             chat.completion().await?
         };
 
-        let result = message
-            .channel_id
-            .send_message(&ctx, |builder| {
-                if message.guild_id.is_some() {
-                    builder.reference_message(message);
-                }
-                builder.content(chat_completion.content)
-            })
-            .await?;
-        Ok(result)
+        if let Some(content) = chat_completion.content {
+            let result = message
+                .channel_id
+                .send_message(&ctx, |builder| {
+                    if message.guild_id.is_some() {
+                        builder.reference_message(message);
+                    }
+                    builder.content(content)
+                })
+                .await?;
+            return Ok(result);
+        }
+
+        panic!("FaultyBot does not support GPT function calls (yet?)")
     }
 }

@@ -26,7 +26,8 @@ impl Chat {
             model: model.to_string(),
             messages: vec![ChatCompletionMessage {
                 role: ChatCompletionMessageRole::System,
-                content: system_prompt,
+                content: Some(system_prompt),
+                function_call: None,
                 name: None,
             }],
         };
@@ -69,14 +70,15 @@ impl Chat {
         self.messages.push(ChatCompletionMessage {
             role,
             name,
-            content: message.content.clone(),
+            content: Some(message.content.clone()),
+            function_call: None,
         });
     }
 
     pub async fn completion(&mut self) -> Result<ChatCompletionMessage, Error> {
         let completion = ChatCompletion::builder(&self.model, self.messages.clone())
             .create()
-            .await??;
+            .await?;
 
         let choice = completion.choices.first().unwrap().message.clone();
 

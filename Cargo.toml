@@ -44,6 +44,7 @@ default_features = false
 features = [ "http-listener" ]
 
 [dependencies.poise]
+#path = "../poise"
 git = "https://github.com/serenity-rs/poise.git"
 branch = "next"
 version = "0.5.5"
