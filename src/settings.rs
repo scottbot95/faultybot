@@ -20,7 +20,7 @@ pub(crate) struct Database {
     pub(crate) name: Option<String>,
     pub(crate) user: Option<String>,
     pub(crate) password: Option<String>,
-    pub(crate) params: HashMap<String, String>,
+    pub(crate) params: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]

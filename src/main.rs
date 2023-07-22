@@ -52,7 +52,7 @@ async fn main() {
     set_key(settings.openai.key.clone());
 
     info!("Connecting to database...");
-    let db = database::Database::connect(&settings)
+    let db = database::Database::connect(&settings.database)
         .await
         .expect("Failed to connect to database");
     db.migrate()
