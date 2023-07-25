@@ -1,4 +1,4 @@
-use crate::settings::GlobalSettings;
+use crate::settings::config::FaultybotConfig;
 use metrics::{describe_counter, describe_histogram, histogram, NoopRecorder};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_statsd::StatsdBuilder;
@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{info, warn};
 
-pub(crate) fn init_metrics(settings: &GlobalSettings) {
+pub(crate) fn init_metrics(settings: &FaultybotConfig) {
     if install_prometheus_recorder(settings).expect("Failed to install Prometheus recorder") {
         info!("Installed Prometheus metrics recorder");
         describe_metrics();
@@ -65,7 +65,7 @@ fn describe_metrics() {
     );
 }
 
-fn install_prometheus_recorder(settings: &GlobalSettings) -> Result<bool, Box<dyn Error>> {
+fn install_prometheus_recorder(settings: &FaultybotConfig) -> Result<bool, Box<dyn Error>> {
     let address = match &settings.prometheus {
         Some(prometheus) => SocketAddr::from_str(&prometheus.listen)?,
         None => return Ok(false),
@@ -82,7 +82,7 @@ fn install_prometheus_recorder(settings: &GlobalSettings) -> Result<bool, Box<dy
     Ok(true)
 }
 
-fn install_statsd_recorder(settings: &GlobalSettings) -> Result<bool, Box<dyn Error>> {
+fn install_statsd_recorder(settings: &FaultybotConfig) -> Result<bool, Box<dyn Error>> {
     let (host, port) = match settings.statsd.as_ref() {
         Some(statsd) => (statsd.host.clone(), statsd.port),
         None => return Ok(false),

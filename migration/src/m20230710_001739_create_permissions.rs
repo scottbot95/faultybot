@@ -29,9 +29,9 @@ impl MigrationTrait for Migration {
                             .primary_key()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Permission::UserId).integer())
-                    .col(ColumnDef::new(Permission::GuildId).integer())
-                    .col(ColumnDef::new(Permission::RoleId).integer())
+                    .col(ColumnDef::new(Permission::UserId).big_unsigned())
+                    .col(ColumnDef::new(Permission::GuildId).big_unsigned())
+                    .col(ColumnDef::new(Permission::RoleId).big_unsigned())
                     .col(ColumnDef::new(Permission::Action).string().not_null())
                     .col(
                         ColumnDef::new(Permission::Effect)

@@ -5,7 +5,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::error::CooldownError;
 use crate::{Data, Error};
-use poise::{serenity_prelude as serenity};
+use poise::serenity_prelude as serenity;
 
 pub(crate) struct Handler {
     // cooldowns: RwLock<Cooldowns<Data, Error>>,

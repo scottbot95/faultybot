@@ -20,6 +20,7 @@ metrics = "0.21.0"
 metrics-exporter-statsd = "0.5.0"
 metrics-util = "0.15.0"
 serde = "1.0"
+serde_json = "1.0"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 lazy_static = "1.4.0"
@@ -42,6 +43,10 @@ features = [ "yaml" ]
 version = "0.12.0"
 default_features = false
 features = [ "http-listener" ]
+
+[dependencies.moka]
+version = "0.11.2"
+features = [ "future" ]
 
 [dependencies.poise]
 #path = "../poise"
@@ -66,3 +71,6 @@ features = [ "macros", "signal", "rt-multi-thread" ]
 version = "0.11.14"
 default-features = false
 features = [ "json", "rustls", "rustls-tls", "hyper-rustls", "tokio-rustls" ]
+
+[dev-dependencies]
+ctor = "0.2.3"

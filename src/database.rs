@@ -1,20 +1,32 @@
-use std::fmt::Write;
 use crate::Error;
 use migration::MigratorTrait;
+use std::fmt::Write;
 use tracing::log::LevelFilter;
 
+#[derive(Debug, Clone)]
 pub struct Database {
     connection: sea_orm::DatabaseConnection,
 }
 
 impl Database {
-    pub async fn connect(settings: &crate::settings::Database) -> Result<Database, Error> {
+    pub async fn connect(settings: &crate::settings::config::Database) -> Result<Database, Error> {
         let url = match settings.url.clone() {
             Some(url) => url,
             None => {
                 let mut url = "postgresql://".to_string();
-                write!(&mut url, "/{}", settings.name.clone().expect("Must provide database.name if database.url is not set"))?;
-                write!(&mut url, "?host={}", settings.host.as_deref().unwrap_or("localhost"))?;
+                write!(
+                    &mut url,
+                    "/{}",
+                    settings
+                        .name
+                        .clone()
+                        .expect("Must provide database.name if database.url is not set")
+                )?;
+                write!(
+                    &mut url,
+                    "?host={}",
+                    settings.host.as_deref().unwrap_or("localhost")
+                )?;
                 if let Some(port) = settings.port {
                     write!(&mut url, "&port={}", port)?;
                 }
@@ -44,5 +56,9 @@ impl Database {
     pub async fn migrate(&self) -> Result<(), Error> {
         migration::Migrator::up(&self.connection, None).await?;
         Ok(())
+    }
+
+    pub(crate) fn connection(&self) -> &sea_orm::DatabaseConnection {
+        &self.connection
     }
 }

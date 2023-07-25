@@ -6,6 +6,10 @@ mod handler;
 mod metrics;
 mod settings;
 
+#[cfg(test)]
+mod test_util;
+mod util;
+
 use dotenvy::dotenv;
 use openai::set_key;
 
@@ -13,10 +17,12 @@ use crate::commands::help;
 use crate::metrics::{init_metrics, periodic_metrics};
 use clap::Parser;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info};
 
-use crate::settings::GlobalSettings;
+use crate::settings::config::FaultybotConfig;
+use crate::settings::SettingsProvider;
 use poise::{serenity_prelude as serenity, CooldownConfig};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -27,6 +33,8 @@ pub struct Data {
     handler: handler::Handler,
     #[allow(dead_code)]
     db: database::Database,
+    #[allow(dead_code)]
+    settings_provider: SettingsProvider,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -40,7 +48,12 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     dotenv().ok(); // ignore errors
-    let settings = GlobalSettings::new(args.cfg_file).expect("Failed to load settings");
+    let config = settings::config::build_config(args.cfg_file).expect("Failed to load config");
+
+    let settings: FaultybotConfig = config
+        .clone()
+        .try_deserialize()
+        .expect("Failed to load settings");
 
     // Initialize the logger
     tracing_subscriber::fmt()
@@ -86,12 +99,13 @@ async fn main() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
-                    db,
+                    db: db.clone(),
                     handler: handler::Handler::new(CooldownConfig {
                         user: Some(Duration::from_secs(10)),
                         guild: Some(Duration::from_secs(5)),
                         ..Default::default()
                     }),
+                    settings_provider: crate::settings::SettingsProvider::new(1000, config, db),
                 })
             })
         })
