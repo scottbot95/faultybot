@@ -15,6 +15,7 @@ sea-orm = "0.11.3"
 [dependencies]
 async-recursion = "1.0.4"
 derive_more = "0.99.17"
+derivative = "2.2.0"
 dotenvy = "0.15.6"
 metrics = "0.21.0"
 metrics-exporter-statsd = "0.5.0"

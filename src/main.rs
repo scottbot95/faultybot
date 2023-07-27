@@ -9,6 +9,7 @@ mod settings;
 #[cfg(test)]
 mod test_util;
 mod util;
+mod permissions;
 
 use dotenvy::dotenv;
 use openai::set_key;
@@ -23,7 +24,7 @@ use tracing::{error, info};
 
 use crate::settings::config::FaultybotConfig;
 use crate::settings::SettingsProvider;
-use poise::{serenity_prelude as serenity, CooldownConfig};
+use poise::{serenity_prelude as serenity};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -54,6 +55,8 @@ async fn main() {
         .clone()
         .try_deserialize()
         .expect("Failed to load settings");
+
+    let config = Arc::new(config);
 
     // Initialize the logger
     tracing_subscriber::fmt()
@@ -100,12 +103,12 @@ async fn main() {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
                     db: db.clone(),
-                    handler: handler::Handler::new(CooldownConfig {
+                    handler: handler::Handler::new(crate::util::CooldownConfig {
                         user: Some(Duration::from_secs(10)),
                         guild: Some(Duration::from_secs(5)),
                         ..Default::default()
                     }),
-                    settings_provider: crate::settings::SettingsProvider::new(1000, config, db),
+                    settings_provider: crate::settings::SettingsProvider::new(config, db),
                 })
             })
         })

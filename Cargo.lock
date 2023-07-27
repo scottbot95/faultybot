@@ -1039,6 +1039,7 @@ dependencies = [
  "clap 4.3.19",
  "config",
  "ctor",
+ "derivative",
  "derive_more",
  "dotenvy",
  "entities",

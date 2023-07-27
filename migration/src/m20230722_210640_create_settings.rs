@@ -69,35 +69,34 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(GuildUserSettings::Table)
+                    .table(MemberSettings::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(GuildUserSettings::Id)
+                        ColumnDef::new(MemberSettings::Id)
                             .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(GuildUserSettings::GuildId)
+                        ColumnDef::new(MemberSettings::GuildId)
                             .big_unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(GuildUserSettings::UserId)
+                        ColumnDef::new(MemberSettings::UserId)
                             .big_unsigned()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(GuildUserSettings::Key).string().not_null())
-                    .col(ColumnDef::new(GuildUserSettings::Value).json().not_null())
+                    .col(ColumnDef::new(MemberSettings::Key).string().not_null())
+                    .col(ColumnDef::new(MemberSettings::Value).json().not_null())
                     .index(
                         Index::create()
                             .name("GuildUserKey")
                             .unique()
-                            .col(GuildUserSettings::GuildId)
-                            .col(GuildUserSettings::UserId)
-                            .col(GuildUserSettings::Key)
-                            .nulls_not_distinct(),
+                            .col(MemberSettings::GuildId)
+                            .col(MemberSettings::UserId)
+                            .col(MemberSettings::Key),
                     )
                     .to_owned(),
             )
@@ -116,7 +115,7 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
-            .drop_table(Table::drop().table(GuildUserSettings::Table).to_owned())
+            .drop_table(Table::drop().table(MemberSettings::Table).to_owned())
             .await?;
 
         Ok(())
@@ -143,7 +142,7 @@ enum GuildSettings {
 }
 
 #[derive(Iden)]
-enum GuildUserSettings {
+enum MemberSettings {
     Table,
     Id,
     GuildId,

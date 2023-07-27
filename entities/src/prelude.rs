@@ -2,5 +2,5 @@
 
 pub use super::channel_settings::Entity as ChannelSettings;
 pub use super::guild_settings::Entity as GuildSettings;
-pub use super::guild_user_settings::Entity as GuildUserSettings;
+pub use super::member_settings::Entity as MemberSettings;
 pub use super::permission::Entity as Permission;

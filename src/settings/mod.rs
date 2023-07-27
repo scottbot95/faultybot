@@ -1,127 +1,192 @@
 mod channel_settings;
 pub(crate) mod config;
-mod database_source;
+pub mod merge_strategies;
 
-use crate::settings::database_source::{
-    ChannelSettingsDatabaseSource, GuildSettingsDatabaseSource, GuildUserSettingsDatabaseSource,
-};
-use crate::util::{CachingMap, CascadingMap};
+use std::sync::Arc;
 use crate::Error;
 use poise::serenity_prelude::{ChannelId, GuildId, UserId};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
 
-#[derive(Debug, Default, Deserialize)]
-pub struct ChatSettings {
-    pub cooldown_sec: f32,
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SettingsKind {
+    Global,
+    Guild(GuildId),
+    Channel(ChannelId),
+    Member(GuildId, UserId),
 }
 
-#[derive(Debug, Default, Deserialize)]
-pub struct GlobalSettings {}
-
-#[derive(Clone, Default, Debug, Hash, Eq, PartialEq)]
-pub struct SettingsContext<'a> {
-    pub guild_id: Option<GuildId>,
-    pub channel_id: ChannelId,
-    pub user_id: UserId,
-    pub key: &'a str,
+#[derive(Debug, Clone)]
+pub struct SettingsValue<T> {
+    kind: SettingsKind,
+    value: Option<T>,
 }
 
-pub struct SettingsProvider {
-    cache: CachingMap<SettingsContext<'static>, serde_json::Value>,
-}
-
-impl SettingsProvider {
-    pub fn new(
-        cache_capacity: u64,
-        config: ::config::Config,
-        db: crate::database::Database,
-    ) -> Self {
-        let data = CascadingMap::new(vec![
-            Box::pin(ConfigSettingsSource {
-                config,
-                prefix: Some("global_settings.".to_owned()),
-            }),
-            Box::pin(GuildSettingsDatabaseSource::new(db.clone())),
-            Box::pin(ChannelSettingsDatabaseSource::new(db.clone())),
-            Box::pin(GuildUserSettingsDatabaseSource::new(db)),
-        ]);
+impl<T> SettingsValue<T> {
+    pub fn new(value: Option<T>, kind: SettingsKind) -> Self {
         Self {
-            cache: CachingMap::new(cache_capacity, data),
+            kind,
+            value,
         }
     }
 
-    pub async fn get<T: serde::de::DeserializeOwned>(
-        &self,
-        ctx: SettingsContext<'static>,
-    ) -> Result<Option<T>, crate::Error> {
-        let json = self.cache.get(ctx).await?;
-
-        let parsed = match json {
-            Some(json) => Some(serde_json::from_value(json)?),
-            None => None,
-        };
-
-        Ok(parsed)
+    pub fn value(&self) -> &Option<T> {
+        &self.value
     }
 
-    pub async fn get_with<T: DeserializeOwned>(
-        &self,
-        ctx: SettingsContext<'static>,
-        default: impl FnOnce() -> T,
-    ) -> Result<T, crate::Error> {
-        let value = self.get(ctx).await?.unwrap_or_else(default);
+    pub fn kind(&self) -> &SettingsKind {
+        &self.kind
+    }
+}
+
+pub struct SettingsContext {
+    pub guild_id: Option<GuildId>,
+    pub channel_id: Option<ChannelId>,
+    pub user_id: Option<UserId>,
+}
+
+pub enum MergeDecision {
+    Left,
+    Right,
+}
+
+pub trait MergeFn<V>: Send + Sync {
+    fn merge(&self, lhs: &V, rhs: &V) -> MergeDecision;
+}
+
+impl<V, F> MergeFn<V> for F
+    where F: Fn(&V, &V) -> MergeDecision + Send + Sync {
+    fn merge(&self, lhs: &V, rhs: &V) -> MergeDecision {
+        self(lhs, rhs)
+    }
+}
+
+pub struct SettingsProvider {
+    db: crate::database::Database,
+    config: Arc<::config::Config>,
+}
+
+impl SettingsProvider {
+    pub fn new(config: Arc<::config::Config>, db: crate::database::Database) -> Self {
+        Self {
+            config,
+            db,
+        }
+    }
+
+    pub async fn get_value<T: DeserializeOwned>(&self, ctx: SettingsContext, key: &str, merge: impl MergeFn<T>) -> Result<SettingsValue<T>, Error> {
+        let mut value = SettingsValue::new(self.get_global(key)?, SettingsKind::Global);
+
+        if let Some(guild_id) = ctx.guild_id {
+            let guild_val = SettingsValue::new(
+                self.get_guild(guild_id, key).await?,
+                SettingsKind::Guild(guild_id),
+            );
+            value = merge_values(&merge, value, guild_val);
+        }
+
+        if let Some(channel_id) = ctx.channel_id {
+            let channel_val = SettingsValue::new(
+                self.get_channel(channel_id, key).await?,
+                SettingsKind::Channel(channel_id),
+            );
+            value = merge_values(&merge, value, channel_val);
+        }
+
+        if let Some(guild_id) = ctx.guild_id {
+            if let Some(user_id) = ctx.user_id {
+                let member_val = SettingsValue::new(
+                    self.get_member(guild_id, user_id, key).await?,
+                    SettingsKind::Member(guild_id, user_id),
+                );
+                value = merge_values(&merge, value, member_val);
+            }
+        }
 
         Ok(value)
     }
 
-    /// Invalidate the cache for a specific guild. Call after changing a guild-level setting
-    pub fn invalidate_guild(&self, guild_id: GuildId) {
-        self.cache
-            .invalidate_entries_if(move |k, _v| match k.guild_id {
-                Some(key_guild) => key_guild == guild_id,
-                None => false,
-            });
-    }
-
-    /// Invalidate the cache for a specific channel. Call after changing a channel-level setting
-    pub fn invalidate_channel(&self, channel_id: ChannelId) {
-        self.cache
-            .invalidate_entries_if(move |k, _v| k.channel_id == channel_id);
-    }
-
-    /// Invalidate the cache for a specific guild+user combo. Call after changing a user-level setting
-    pub fn invalidate_guild_user(&self, guild_id: GuildId, user_id: UserId) {
-        self.cache
-            .invalidate_entries_if(move |k, _v| match k.guild_id {
-                Some(key_guild) => key_guild == guild_id && k.user_id == user_id,
-                None => false,
-            });
-    }
-}
-
-struct ConfigSettingsSource {
-    config: ::config::Config,
-    prefix: Option<String>,
-}
-
-#[poise::async_trait]
-impl crate::util::AsyncSource<SettingsContext<'static>, serde_json::Value>
-    for ConfigSettingsSource
-{
-    async fn get(
-        &self,
-        key: &SettingsContext<'static>,
-    ) -> Result<Option<serde_json::Value>, Error> {
-        let key = match &self.prefix {
-            Some(prefix) => format!("{}{}", prefix, key.key),
-            None => key.key.to_owned(),
+    pub fn get_global<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Error> {
+        let val = match self.config.get(format!("global.{}", key).as_str()) {
+            Ok(val) => Some(val),
+            Err(::config::ConfigError::NotFound(_)) => None,
+            Err(err) => return Err(Box::new(err)),
         };
 
-        match self.config.get(key.as_str()) {
-            Ok(val) => Ok(Some(val)),
-            Err(::config::ConfigError::NotFound(_)) => Ok(None),
-            Err(err) => Err(Box::new(err)),
+        Ok(val)
+    }
+
+    pub async fn get_guild<T: DeserializeOwned>(&self, guild_id: GuildId, key: &str) -> Result<Option<T>, Error> {
+        let guild_id = u64_to_i64(guild_id);
+        let entry = entities::guild_settings::Entity::find()
+            .filter(entities::guild_settings::Column::GuildId.eq(guild_id))
+            .filter(entities::guild_settings::Column::Key.eq(key))
+            .one(self.db.connection())
+            .await?;
+
+        let value = match entry {
+            Some(model) => Some(serde_json::from_value(model.value)?),
+            None => None
+        };
+
+        Ok(value)
+    }
+
+    pub async fn get_channel<T: DeserializeOwned>(&self, channel_id: ChannelId, key: &str) -> Result<Option<T>, Error> {
+        let channel_id = u64_to_i64(channel_id);
+        let entry = entities::channel_settings::Entity::find()
+            .filter(entities::channel_settings::Column::ChannelId.eq(channel_id))
+            .filter(entities::channel_settings::Column::Key.eq(key))
+            .one(self.db.connection())
+            .await?;
+
+        let value = match entry {
+            Some(model) => Some(serde_json::from_value(model.value)?),
+            None => None
+        };
+
+        Ok(value)
+    }
+
+    pub async fn get_member<T: DeserializeOwned>(&self, guild_id: GuildId, user_id: UserId, key: &str) -> Result<Option<T>, Error> {
+        let guild_id = u64_to_i64(guild_id);
+        let user_id = u64_to_i64(user_id);
+
+        let entry = entities::member_settings::Entity::find()
+            .filter(entities::member_settings::Column::GuildId.eq(guild_id))
+            .filter(entities::member_settings::Column::UserId.eq(user_id))
+            .filter(entities::member_settings::Column::Key.eq(key))
+            .one(self.db.connection())
+            .await?;
+
+        let value = match entry {
+            Some(model) => Some(serde_json::from_value(model.value)?),
+            None => None
+        };
+
+        Ok(value)
+    }
+}
+
+/// Transmutes a Into<u64> value into an i64. This preserves the binary
+/// representation and simply re-interprets the memory. This is used as a hack
+/// to get around the fact that Postgres doesn't actually support unsigned data
+// TODO maybe we just switch to mysql?
+fn u64_to_i64<T: Into<u64>>(num: T) -> i64 {
+    unsafe {
+        std::mem::transmute(num.into())
+    }
+}
+
+fn merge_values<T: DeserializeOwned>(merge: &impl MergeFn<T>, lhs: SettingsValue<T>, rhs: SettingsValue<T>) -> SettingsValue<T> {
+    if lhs.value.is_some() {
+        lhs
+    } else if let (Some(lhs_val), Some(rhs_val)) = (&lhs.value, &rhs.value) {
+        match merge.merge(lhs_val, rhs_val) {
+            MergeDecision::Left => lhs,
+            MergeDecision::Right => rhs,
         }
+    } else {
+        rhs
     }
 }
