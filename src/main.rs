@@ -22,7 +22,7 @@ use std::time::Duration;
 use tracing::{error, info};
 
 use crate::settings::config::FaultybotConfig;
-use crate::settings::SettingsManager;
+use settings::manager::SettingsManager;
 use poise::serenity_prelude as serenity;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -107,7 +107,7 @@ async fn main() {
                         guild: Some(Duration::from_secs(5)),
                         ..Default::default()
                     }),
-                    settings_manager: crate::settings::SettingsManager::new(config, db),
+                    settings_manager: settings::manager::SettingsManager::new(config, db),
                 })
             })
         })
