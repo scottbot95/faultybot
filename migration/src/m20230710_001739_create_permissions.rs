@@ -66,7 +66,7 @@ impl MigrationTrait for Migration {
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
-#[derive(Iden)]
+#[derive(DeriveIden)]
 enum Permission {
     Table,
     Id,
@@ -78,11 +78,11 @@ enum Permission {
     Until,
 }
 
-#[derive(Iden, EnumIter)]
+#[derive(DeriveIden, EnumIter)]
 pub enum Effect {
     Table,
-    #[iden = "Allow"]
+    #[sea_orm(iden = "Allow")]
     Allow,
-    #[iden = "Deny"]
+    #[sea_orm(iden = "Deny")]
     Deny,
 }

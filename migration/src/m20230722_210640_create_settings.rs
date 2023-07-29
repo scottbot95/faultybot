@@ -123,7 +123,7 @@ impl MigrationTrait for Migration {
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
-#[derive(Iden)]
+#[derive(DeriveIden)]
 enum ChannelSettings {
     Table,
     Id,
@@ -132,7 +132,7 @@ enum ChannelSettings {
     Value,
 }
 
-#[derive(Iden)]
+#[derive(DeriveIden)]
 enum GuildSettings {
     Table,
     Id,
@@ -141,7 +141,7 @@ enum GuildSettings {
     Value,
 }
 
-#[derive(Iden)]
+#[derive(DeriveIden)]
 enum MemberSettings {
     Table,
     Id,
