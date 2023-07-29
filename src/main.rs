@@ -6,15 +6,14 @@ mod handler;
 mod metrics;
 mod settings;
 
+mod permissions;
 #[cfg(test)]
 mod test_util;
 mod util;
-mod permissions;
 
 use dotenvy::dotenv;
 use openai::set_key;
 
-use crate::commands::help;
 use crate::metrics::{init_metrics, periodic_metrics};
 use clap::Parser;
 use std::path::PathBuf;
@@ -23,8 +22,8 @@ use std::time::Duration;
 use tracing::{error, info};
 
 use crate::settings::config::FaultybotConfig;
-use crate::settings::SettingsProvider;
-use poise::{serenity_prelude as serenity};
+use crate::settings::SettingsManager;
+use poise::serenity_prelude as serenity;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -35,7 +34,7 @@ pub struct Data {
     #[allow(dead_code)]
     db: database::Database,
     #[allow(dead_code)]
-    settings_provider: SettingsProvider,
+    settings_manager: SettingsManager,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -78,7 +77,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![help()],
+            commands: commands::commands_vec(),
             event_handler: |ctx, event, framework, data: &Data| {
                 Box::pin(async move {
                     data.handler
@@ -108,7 +107,7 @@ async fn main() {
                         guild: Some(Duration::from_secs(5)),
                         ..Default::default()
                     }),
-                    settings_provider: crate::settings::SettingsProvider::new(config, db),
+                    settings_manager: crate::settings::SettingsManager::new(config, db),
                 })
             })
         })

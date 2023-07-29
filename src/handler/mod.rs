@@ -1,8 +1,8 @@
-use std::time::Duration;
 use crate::gpt::Chat;
 use metrics::{histogram, increment_counter};
+use std::time::Duration;
 use tokio::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::error::CooldownError;
 use crate::{Data, Error};
@@ -16,7 +16,9 @@ pub(crate) struct Handler {
 impl Handler {
     pub fn new(default_config: crate::util::CooldownConfig) -> Self {
         Self {
-            cooldowns: RwLock::new(crate::util::Cooldowns::new(SettingsCooldownProvider { default_config })),
+            cooldowns: RwLock::new(crate::util::Cooldowns::new(SettingsCooldownProvider {
+                default_config,
+            })),
         }
     }
 
@@ -35,15 +37,18 @@ impl Handler {
                 info!("Connection resumed");
             }
             poise::Event::Message { new_message } => {
-                let result = self.handle_message(ctx.clone(), framework.clone(), new_message.clone()).await;
+                let result = self
+                    .handle_message(ctx.clone(), framework.clone(), new_message.clone())
+                    .await;
                 match result {
                     Ok(()) => {}
                     Err(err) => match err.downcast::<CooldownError>() {
                         Ok(cd_err) => {
-                            warn!(
-                                "Command on CD for user {}. {}",
-                                new_message.author.name, cd_err
+                            let msg = format!(
+                                "You're too fast. Please wait {} seconds before retrying",
+                                cd_err.remaining().as_secs()
                             );
+                            new_message.reply(ctx, msg).await?;
                         }
                         Err(err) => return Err(err),
                     },
@@ -143,7 +148,10 @@ impl Handler {
                 .channel_id
                 .send_message(&ctx, |builder| {
                     if message.guild_id.is_some() {
-                        builder.reference_message(message);
+                        builder
+                            .reference_message(message)
+                            // Disallow mentions
+                            .allowed_mentions(|f| f);
                     }
                     builder.content(content)
                 })
@@ -163,27 +171,34 @@ const COOLDOWN_KEY: &str = "chat.cooldown";
 
 #[poise::async_trait]
 impl crate::util::CooldownConfigProvider<Data, Error> for SettingsCooldownProvider {
-    async fn get_config(&self, ctx: crate::util::CooldownContext, user_data: &Data) -> Result<crate::util::CooldownConfig, Error> {
-
+    async fn get_config(
+        &self,
+        ctx: crate::util::CooldownContext,
+        user_data: &Data,
+    ) -> Result<crate::util::CooldownConfig, Error> {
         let config = crate::util::CooldownConfig {
-            global: user_data.settings_provider
+            global: user_data
+                .settings_manager
                 .get_global(COOLDOWN_KEY)?
                 .map(Duration::from_secs_f32),
             // don't support bot-wide per-user settings. You can have settings unique to DMs by channel though
             user: None,
             guild: match ctx.guild_id {
-                Some(guild_id) => user_data.settings_provider
+                Some(guild_id) => user_data
+                    .settings_manager
                     .get_guild(guild_id, COOLDOWN_KEY)
                     .await?
                     .map(Duration::from_secs_f32),
                 None => None,
             },
-            channel: user_data.settings_provider
+            channel: user_data
+                .settings_manager
                 .get_channel(ctx.channel_id, COOLDOWN_KEY)
                 .await?
                 .map(Duration::from_secs_f32),
             member: match ctx.guild_id {
-                Some(guild_id) => user_data.settings_provider
+                Some(guild_id) => user_data
+                    .settings_manager
                     .get_member(guild_id, ctx.user_id, COOLDOWN_KEY)
                     .await?
                     .map(Duration::from_secs_f32),

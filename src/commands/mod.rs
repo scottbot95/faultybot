@@ -1,4 +1,11 @@
-use crate::{Context, Error};
+mod permissions;
+mod settings;
+
+use crate::{Context, Data, Error};
+
+pub fn commands_vec() -> Vec<poise::Command<Data, Error>> {
+    vec![help(), permissions::permissions(), settings::settings()]
+}
 
 /// Show this help menu
 #[poise::command(slash_command)]

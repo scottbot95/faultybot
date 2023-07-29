@@ -1,8 +1,9 @@
 use super::*;
 
-pub struct TakeRight;
+/// Always chooses the rhs of the merge since sources are already sorted by least-to-most specific
+pub struct MostSpecific;
 
-impl<V> MergeFn<V> for TakeRight {
+impl<V> MergeFn<V> for MostSpecific {
     fn merge(&self, _lhs: &V, _rhs: &V) -> MergeDecision {
         MergeDecision::Right
     }

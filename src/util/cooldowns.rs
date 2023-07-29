@@ -34,7 +34,7 @@ pub struct CooldownConfig {
     /// This cooldown operates on a per-channel basis
     pub channel: Option<Duration>,
     /// This cooldown operates on a per-member basis
-    pub member: Option<Duration>
+    pub member: Option<Duration>,
 }
 
 #[poise::async_trait]
@@ -46,9 +46,9 @@ pub trait CooldownConfigProvider<U, E> {
 impl<U, E, F, Fut> CooldownConfigProvider<U, E> for F
 where
     F: Fn(CooldownContext, &U) -> Fut + Send + Sync,
-    Fut: Future<Output=Result<CooldownConfig, E>> + Send,
-    U: Sync {
-
+    Fut: Future<Output = Result<CooldownConfig, E>> + Send,
+    U: Sync,
+{
     async fn get_config(&self, ctx: CooldownContext, user_data: &U) -> Result<CooldownConfig, E> {
         self(ctx, user_data).await
     }
@@ -121,7 +121,10 @@ impl<U, E> Cooldowns<U, E> {
         ctx: CooldownContext,
         user_data: &U,
     ) -> Result<Option<Duration>, E> {
-        let cooldowns = self.cooldown_provider.get_config(ctx.clone(), user_data).await?;
+        let cooldowns = self
+            .cooldown_provider
+            .get_config(ctx.clone(), user_data)
+            .await?;
         let mut cooldown_data = vec![
             (cooldowns.global, self.global_invocation),
             (

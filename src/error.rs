@@ -17,3 +17,10 @@ impl CooldownError {
         self.remaining
     }
 }
+
+#[derive(Debug, Display, Clone)]
+pub enum FaultyBotError {
+    InvalidInputError(String),
+}
+
+impl std::error::Error for FaultyBotError {}
