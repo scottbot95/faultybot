@@ -22,10 +22,51 @@ async fn set(
     channel: Option<ChannelId>,
     #[description = "User setting will be scoped to"]
     user: Option<UserId>,
-    setting: String,
-    value: String,
+    key: String,
+    #[description = "JSON encoded value. (text must be wrapped in quotes)"]
+    value: serde_json::Value,
 ) -> Result<(), Error> {
-    todo!()
+    let settings_manager = &ctx.data().settings_manager;
+    let updated_scope = match (channel, user) {
+        (Some(_), Some(_)) => {
+            let msg = "Per-user-per-channel settings not supported. Please specify only one scope".to_string();
+            return Err(FaultyBotError::InvalidInputError(msg).into());
+        }
+        (Some(channel_id), None) => {
+            settings_manager.set_channel(channel_id, key.clone(), value.clone()).await?;
+            SettingsScopeKind::Channel(channel_id)
+        }
+        (None, Some(user_id)) => {
+            let guild_id = ctx.guild_id().ok_or_else(|| {
+                let msg = "Per-user settings not support outside a server. Please user per-channel settings for DMs".to_string();
+                FaultyBotError::InvalidInputError(msg)
+            })?;
+            settings_manager.set_member(guild_id, user_id, key.clone(), value.clone()).await?;
+            SettingsScopeKind::Member(guild_id, user_id)
+        }
+        (None, None) => {
+            if let Some(guild_id) = ctx.guild_id() {
+                settings_manager.set_guild(guild_id, key.clone(), value.clone()).await?;
+                SettingsScopeKind::Guild(guild_id)
+            } else {
+                let channel_id = ctx.channel_id();
+                settings_manager.set_channel(channel_id, key.clone(), value.clone()).await?;
+                SettingsScopeKind::Channel(channel_id)
+            }
+        }
+    };
+
+    let msg = format!(
+        "Successfully updated `{}` to `{}` for {}",
+        key, value, updated_scope
+    );
+    ctx.send(|b|
+        b.content(msg)
+            .ephemeral(true)
+            .allowed_mentions(|f| f)
+    ).await?;
+
+    Ok(())
 }
 
 /// Get settings for a specific scope
@@ -42,12 +83,12 @@ async fn get(
     guild: Option<bool>,
     key: String,
 ) -> Result<(), Error> {
-    let settings_provider = &ctx.data().settings_manager;
+    let settings_manager = &ctx.data().settings_manager;
     let key = key.as_str();
-    let setting = match (channel, user, guild.unwrap_or(false)) {
+    let setting: SettingsValue<serde_json::Value> = match (channel, user, guild.unwrap_or(false)) {
         (Some(channel_id), None, false) => {
-            let value = settings_provider
-                .get_channel::<String>(channel_id, key)
+            let value = settings_manager
+                .get_channel(channel_id, key)
                 .await?;
             SettingsValue::new(value, SettingsScopeKind::Channel(channel_id))
         }
@@ -56,8 +97,8 @@ async fn get(
                 let msg = "Per-user settings not support outside a server. Please user per-channel settings for DMs".to_string();
                 FaultyBotError::InvalidInputError(msg)
             })?;
-            let value = settings_provider
-                .get_member::<String>(guild_id, user_id, key)
+            let value = settings_manager
+                .get_member(guild_id, user_id, key)
                 .await?;
             SettingsValue::new(value, SettingsScopeKind::Member(guild_id, user_id))
         }
@@ -66,7 +107,7 @@ async fn get(
                 let msg = "Cannot set guild-wide settings outside a guild".to_string();
                 FaultyBotError::InvalidInputError(msg)
             })?;
-            let value = settings_provider.get_guild(guild_id, key).await?;
+            let value = settings_manager.get_guild(guild_id, key).await?;
             SettingsValue::new(value, SettingsScopeKind::Guild(guild_id))
         }
         (None, None, false) => {
@@ -75,7 +116,7 @@ async fn get(
                 channel_id: Some(ctx.channel_id()),
                 user_id: Some(ctx.author().id),
             };
-            settings_provider.get_value(ctx, key).await?
+            settings_manager.get_value(ctx, key).await?
         }
         (_, _, _) => {
             let msg = "Please specify only one scope (channel, user, or guild)".to_string();
@@ -85,17 +126,26 @@ async fn get(
 
     let value = setting
         .value()
-        .clone()
+        .as_ref()
+        .map(|v| v.to_string())
         .unwrap_or_else(|| "None".to_string());
 
     let msg = format!(
-        "Key: `{}`\nValue: `{}`\nReason: `{}`",
+        "Key: `{}`\nValue: `{}`\nReason: {}",
         key,
         value,
         setting.scope()
     );
 
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+    ctx.send(|b|
+        b.content(msg)
+            .ephemeral(true)
+            // .allowed_mentions(|f| if let SettingsScopeKind::Member(_, user_id) = setting.scope() {
+            //     f.users(vec![user_id])
+            // } else {
+            //     f
+            // }.replied_user(true))
+    ).await?;
 
     Ok(())
 }

@@ -3,7 +3,7 @@ pub(crate) mod config;
 pub mod merge_strategies;
 pub(crate) mod manager;
 
-use poise::serenity_prelude::{ChannelId, GuildId, UserId};
+use poise::serenity_prelude::{ChannelId, GuildId, Mentionable, UserId};
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -16,33 +16,32 @@ pub enum SettingsScopeKind {
 
 impl std::fmt::Display for SettingsScopeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            SettingsScopeKind::Global => "Global",
-            SettingsScopeKind::Guild(_) => "Guild",
-            SettingsScopeKind::Channel(_) => "Channel",
-            SettingsScopeKind::Member(_, _) => "Member",
-        };
-        write!(f, "{}", msg)
+        match self {
+            SettingsScopeKind::Global => write!(f, "Global"),
+            SettingsScopeKind::Guild(_) => write!(f, "this server"),
+            SettingsScopeKind::Channel(channel_id) => write!(f, "{}", channel_id.mention()),
+            SettingsScopeKind::Member(_, user_id) => write!(f, "{} in this server", user_id.mention()),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SettingsValue<T> {
-    kind: SettingsScopeKind,
-    scope: Option<T>,
+    scope: SettingsScopeKind,
+    value: Option<T>,
 }
 
 impl<T> SettingsValue<T> {
-    pub fn new(scope: Option<T>, kind: SettingsScopeKind) -> Self {
-        Self { kind, scope }
+    pub fn new(value: Option<T>, scope: SettingsScopeKind) -> Self {
+        Self { value, scope }
     }
 
     pub fn value(&self) -> &Option<T> {
-        &self.scope
+        &self.value
     }
 
     pub fn scope(&self) -> &SettingsScopeKind {
-        &self.kind
+        &self.scope
     }
 }
 
@@ -76,14 +75,12 @@ fn merge_values<T: DeserializeOwned>(
     lhs: SettingsValue<T>,
     rhs: SettingsValue<T>,
 ) -> SettingsValue<T> {
-    if lhs.scope.is_some() {
-        lhs
-    } else if let (Some(lhs_val), Some(rhs_val)) = (&lhs.scope, &rhs.scope) {
-        match merge.merge(lhs_val, rhs_val) {
+    match (&lhs.value, &rhs.value) {
+        (None, Some(_)) => rhs,
+        (Some(lhs_val), Some(rhs_val)) => match merge.merge(lhs_val, rhs_val) {
             MergeDecision::Left => lhs,
             MergeDecision::Right => rhs,
         }
-    } else {
-        rhs
+        (_, _) => lhs,
     }
 }

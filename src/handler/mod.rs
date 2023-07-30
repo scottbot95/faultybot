@@ -45,8 +45,8 @@ impl Handler {
                     Err(err) => match err.downcast::<CooldownError>() {
                         Ok(cd_err) => {
                             let msg = format!(
-                                "You're too fast. Please wait {} seconds before retrying",
-                                cd_err.remaining().as_secs()
+                                "You're too fast. Please wait {:.1} seconds before retrying",
+                                cd_err.remaining().as_secs_f32()
                             );
                             new_message.reply(ctx, msg).await?;
                         }

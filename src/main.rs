@@ -12,7 +12,6 @@ mod test_util;
 mod util;
 
 use dotenvy::dotenv;
-use openai::set_key;
 
 use crate::metrics::{init_metrics, periodic_metrics};
 use clap::Parser;
@@ -24,6 +23,7 @@ use tracing::{error, info};
 use crate::settings::config::FaultybotConfig;
 use settings::manager::SettingsManager;
 use poise::serenity_prelude as serenity;
+use tracing_subscriber::EnvFilter;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -59,12 +59,14 @@ async fn main() {
 
     // Initialize the logger
     tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_line_number(true)
         .with_ansi(settings.ansi.colors)
         .init();
 
     init_metrics(&settings);
 
-    set_key(settings.openai.key.clone());
+    openai::set_key(settings.openai.key.clone());
 
     info!("Connecting to database...");
     let db = database::Database::connect(&settings.database)
