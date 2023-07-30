@@ -95,23 +95,32 @@ impl SettingsManager {
         Ok(value)
     }
 
-    pub async fn set_guild<T: serde::Serialize>(&self, guild_id: GuildId, key: String, value: T) -> Result<(), Error> {
-        let json = serde_json::to_value(value)?;
-        let model = guild_settings::ActiveModel {
-            guild_id: guild_id.to_i64().into_active_value(),
-            key: key.into_active_value(),
-            value: json.into_active_value(),
-            ..Default::default()
-        };
+    pub async fn set_guild<T: serde::Serialize>(&self, guild_id: GuildId, key: String, value: Option<T>) -> Result<(), Error> {
+        if let Some(value) = value {
+            let json = serde_json::to_value(value)?;
+            let model = guild_settings::ActiveModel {
+                guild_id: guild_id.to_i64().into_active_value(),
+                key: key.into_active_value(),
+                value: json.into_active_value(),
+                ..Default::default()
+            };
 
-        guild_settings::Entity::insert(model)
-            .on_conflict(OnConflict::columns(vec![
-                guild_settings::Column::GuildId,
-                guild_settings::Column::Key,
-            ]).update_column(guild_settings::Column::Value)
-                .to_owned())
-            .exec(self.db.connection())
-            .await?;
+            guild_settings::Entity::insert(model)
+                .on_conflict(OnConflict::columns(vec![
+                    guild_settings::Column::GuildId,
+                    guild_settings::Column::Key,
+                ]).update_column(guild_settings::Column::Value)
+                    .to_owned())
+                .exec(self.db.connection())
+                .await?;
+        } else {
+            guild_settings::Entity::delete_many()
+                .filter(sea_orm::Condition::all()
+                    .add(guild_settings::Column::GuildId.eq(guild_id.to_i64()))
+                    .add(guild_settings::Column::Key.eq(key)))
+                .exec(self.db.connection())
+                .await?;
+        }
 
         Ok(())
     }
@@ -136,23 +145,32 @@ impl SettingsManager {
         Ok(value)
     }
 
-    pub async fn set_channel<T: serde::Serialize>(&self, channel_id: ChannelId, key: String, value: T) -> Result<(), Error> {
-        let json = serde_json::to_value(value)?;
-        let model = channel_settings::ActiveModel {
-            channel_id: channel_id.to_i64().into_active_value(),
-            key: key.into_active_value(),
-            value: json.into_active_value(),
-            ..Default::default()
-        };
+    pub async fn set_channel<T: serde::Serialize>(&self, channel_id: ChannelId, key: String, value: Option<T>) -> Result<(), Error> {
+        if let Some(value) = value {
+            let json = serde_json::to_value(value)?;
+            let model = channel_settings::ActiveModel {
+                channel_id: channel_id.to_i64().into_active_value(),
+                key: key.into_active_value(),
+                value: json.into_active_value(),
+                ..Default::default()
+            };
 
-        channel_settings::Entity::insert(model)
-            .on_conflict(OnConflict::columns(vec![
-                channel_settings::Column::ChannelId,
-                channel_settings::Column::Key,
-            ]).update_column(channel_settings::Column::Value)
-                .to_owned())
-            .exec(self.db.connection())
-            .await?;
+            channel_settings::Entity::insert(model)
+                .on_conflict(OnConflict::columns(vec![
+                    channel_settings::Column::ChannelId,
+                    channel_settings::Column::Key,
+                ]).update_column(channel_settings::Column::Value)
+                    .to_owned())
+                .exec(self.db.connection())
+                .await?;
+        } else {
+            channel_settings::Entity::delete_many()
+                .filter(sea_orm::Condition::all()
+                    .add(channel_settings::Column::ChannelId.eq(channel_id.to_i64()))
+                    .add(channel_settings::Column::Key.eq(key)))
+                .exec(self.db.connection())
+                .await?;
+        }
 
         Ok(())
     }
@@ -181,25 +199,35 @@ impl SettingsManager {
         Ok(value)
     }
 
-    pub async fn set_member<T: serde::Serialize>(&self, guild_id: GuildId, user_id: UserId, key: String, value: T) -> Result<(), Error> {
-        let json = serde_json::to_value(value)?;
-        let model = member_settings::ActiveModel {
-            guild_id: guild_id.to_i64().into_active_value(),
-            user_id: user_id.to_i64().into_active_value(),
-            key: key.into_active_value(),
-            value: json.into_active_value(),
-            ..Default::default()
-        };
+    pub async fn set_member<T: serde::Serialize>(&self, guild_id: GuildId, user_id: UserId, key: String, value: Option<T>) -> Result<(), Error> {
+        if let Some(value) = value {
+            let json = serde_json::to_value(value)?;
+            let model = member_settings::ActiveModel {
+                guild_id: guild_id.to_i64().into_active_value(),
+                user_id: user_id.to_i64().into_active_value(),
+                key: key.into_active_value(),
+                value: json.into_active_value(),
+                ..Default::default()
+            };
 
-        member_settings::Entity::insert(model)
-            .on_conflict(OnConflict::columns(vec![
-                member_settings::Column::GuildId,
-                member_settings::Column::UserId,
-                member_settings::Column::Key,
-            ]).update_column(member_settings::Column::Value)
-                .to_owned())
-            .exec(self.db.connection())
-            .await?;
+            member_settings::Entity::insert(model)
+                .on_conflict(OnConflict::columns(vec![
+                    member_settings::Column::GuildId,
+                    member_settings::Column::UserId,
+                    member_settings::Column::Key,
+                ]).update_column(member_settings::Column::Value)
+                    .to_owned())
+                .exec(self.db.connection())
+                .await?;
+        } else {
+            member_settings::Entity::delete_many()
+                .filter(sea_orm::Condition::all()
+                    .add(member_settings::Column::GuildId.eq(guild_id.to_i64()))
+                    .add(member_settings::Column::UserId.eq(user_id.to_i64()))
+                    .add(member_settings::Column::Key.eq(key))
+                ).exec(self.db.connection())
+                .await?;
+        }
 
         Ok(())
     }
