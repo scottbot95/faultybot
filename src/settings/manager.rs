@@ -1,13 +1,14 @@
-use std::sync::Arc;
-use serde::de::DeserializeOwned;
-use poise::serenity_prelude::{ChannelId, GuildId, UserId};
-use sea_orm::{ColumnTrait, EntityTrait, IntoActiveValue, QueryFilter};
-use sea_orm::sea_query::OnConflict;
-use tracing::debug;
-use entities::{channel_settings, guild_settings, member_settings};
-use crate::{Error, settings};
-use crate::settings::{merge_strategies, MergeFn, SettingsContext, SettingsScopeKind, SettingsValue};
+use crate::settings::{
+    merge_strategies, MergeFn, SettingsContext, SettingsScopeKind, SettingsValue,
+};
 use crate::util::Toi64;
+use crate::{settings, Error};
+use entities::{channel_settings, guild_settings, member_settings};
+use poise::serenity_prelude::{ChannelId, GuildId, UserId};
+use sea_orm::sea_query::OnConflict;
+use sea_orm::{ColumnTrait, EntityTrait, IntoActiveValue, QueryFilter};
+use serde::de::DeserializeOwned;
+use std::sync::Arc;
 
 pub struct SettingsManager {
     db: crate::database::Database,
@@ -95,7 +96,12 @@ impl SettingsManager {
         Ok(value)
     }
 
-    pub async fn set_guild<T: serde::Serialize>(&self, guild_id: GuildId, key: String, value: Option<T>) -> Result<(), Error> {
+    pub async fn set_guild<T: serde::Serialize>(
+        &self,
+        guild_id: GuildId,
+        key: String,
+        value: Option<T>,
+    ) -> Result<(), Error> {
         if let Some(value) = value {
             let json = serde_json::to_value(value)?;
             let model = guild_settings::ActiveModel {
@@ -106,18 +112,23 @@ impl SettingsManager {
             };
 
             guild_settings::Entity::insert(model)
-                .on_conflict(OnConflict::columns(vec![
-                    guild_settings::Column::GuildId,
-                    guild_settings::Column::Key,
-                ]).update_column(guild_settings::Column::Value)
-                    .to_owned())
+                .on_conflict(
+                    OnConflict::columns(vec![
+                        guild_settings::Column::GuildId,
+                        guild_settings::Column::Key,
+                    ])
+                    .update_column(guild_settings::Column::Value)
+                    .to_owned(),
+                )
                 .exec(self.db.connection())
                 .await?;
         } else {
             guild_settings::Entity::delete_many()
-                .filter(sea_orm::Condition::all()
-                    .add(guild_settings::Column::GuildId.eq(guild_id.to_i64()))
-                    .add(guild_settings::Column::Key.eq(key)))
+                .filter(
+                    sea_orm::Condition::all()
+                        .add(guild_settings::Column::GuildId.eq(guild_id.to_i64()))
+                        .add(guild_settings::Column::Key.eq(key)),
+                )
                 .exec(self.db.connection())
                 .await?;
         }
@@ -145,7 +156,12 @@ impl SettingsManager {
         Ok(value)
     }
 
-    pub async fn set_channel<T: serde::Serialize>(&self, channel_id: ChannelId, key: String, value: Option<T>) -> Result<(), Error> {
+    pub async fn set_channel<T: serde::Serialize>(
+        &self,
+        channel_id: ChannelId,
+        key: String,
+        value: Option<T>,
+    ) -> Result<(), Error> {
         if let Some(value) = value {
             let json = serde_json::to_value(value)?;
             let model = channel_settings::ActiveModel {
@@ -156,18 +172,23 @@ impl SettingsManager {
             };
 
             channel_settings::Entity::insert(model)
-                .on_conflict(OnConflict::columns(vec![
-                    channel_settings::Column::ChannelId,
-                    channel_settings::Column::Key,
-                ]).update_column(channel_settings::Column::Value)
-                    .to_owned())
+                .on_conflict(
+                    OnConflict::columns(vec![
+                        channel_settings::Column::ChannelId,
+                        channel_settings::Column::Key,
+                    ])
+                    .update_column(channel_settings::Column::Value)
+                    .to_owned(),
+                )
                 .exec(self.db.connection())
                 .await?;
         } else {
             channel_settings::Entity::delete_many()
-                .filter(sea_orm::Condition::all()
-                    .add(channel_settings::Column::ChannelId.eq(channel_id.to_i64()))
-                    .add(channel_settings::Column::Key.eq(key)))
+                .filter(
+                    sea_orm::Condition::all()
+                        .add(channel_settings::Column::ChannelId.eq(channel_id.to_i64()))
+                        .add(channel_settings::Column::Key.eq(key)),
+                )
                 .exec(self.db.connection())
                 .await?;
         }
@@ -199,7 +220,13 @@ impl SettingsManager {
         Ok(value)
     }
 
-    pub async fn set_member<T: serde::Serialize>(&self, guild_id: GuildId, user_id: UserId, key: String, value: Option<T>) -> Result<(), Error> {
+    pub async fn set_member<T: serde::Serialize>(
+        &self,
+        guild_id: GuildId,
+        user_id: UserId,
+        key: String,
+        value: Option<T>,
+    ) -> Result<(), Error> {
         if let Some(value) = value {
             let json = serde_json::to_value(value)?;
             let model = member_settings::ActiveModel {
@@ -211,21 +238,26 @@ impl SettingsManager {
             };
 
             member_settings::Entity::insert(model)
-                .on_conflict(OnConflict::columns(vec![
-                    member_settings::Column::GuildId,
-                    member_settings::Column::UserId,
-                    member_settings::Column::Key,
-                ]).update_column(member_settings::Column::Value)
-                    .to_owned())
+                .on_conflict(
+                    OnConflict::columns(vec![
+                        member_settings::Column::GuildId,
+                        member_settings::Column::UserId,
+                        member_settings::Column::Key,
+                    ])
+                    .update_column(member_settings::Column::Value)
+                    .to_owned(),
+                )
                 .exec(self.db.connection())
                 .await?;
         } else {
             member_settings::Entity::delete_many()
-                .filter(sea_orm::Condition::all()
-                    .add(member_settings::Column::GuildId.eq(guild_id.to_i64()))
-                    .add(member_settings::Column::UserId.eq(user_id.to_i64()))
-                    .add(member_settings::Column::Key.eq(key))
-                ).exec(self.db.connection())
+                .filter(
+                    sea_orm::Condition::all()
+                        .add(member_settings::Column::GuildId.eq(guild_id.to_i64()))
+                        .add(member_settings::Column::UserId.eq(user_id.to_i64()))
+                        .add(member_settings::Column::Key.eq(key)),
+                )
+                .exec(self.db.connection())
                 .await?;
         }
 

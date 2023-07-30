@@ -17,46 +17,194 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // GuildPolicy table
         manager
             .create_table(
                 Table::create()
-                    .table(Permission::Table)
+                    .table(GuildPolicy::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Permission::Id)
+                        ColumnDef::new(GuildPolicy::Id)
                             .integer()
                             .auto_increment()
                             .primary_key()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Permission::UserId).big_unsigned())
-                    .col(ColumnDef::new(Permission::GuildId).big_unsigned())
-                    .col(ColumnDef::new(Permission::RoleId).big_unsigned())
-                    .col(ColumnDef::new(Permission::Action).string().not_null())
                     .col(
-                        ColumnDef::new(Permission::Effect)
+                        ColumnDef::new(GuildPolicy::GuildId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(GuildPolicy::Action).string().not_null())
+                    .col(
+                        ColumnDef::new(GuildPolicy::Effect)
                             .enumeration(Effect::Table, Effect::iter().skip(1))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Permission::Until).timestamp())
+                    .col(ColumnDef::new(GuildPolicy::Until).timestamp())
                     .index(
                         Index::create()
                             .unique()
-                            .name("PrincipleAction")
-                            .col(Permission::GuildId)
-                            .col(Permission::UserId)
-                            .col(Permission::RoleId)
-                            .col(Permission::Action)
-                            .nulls_not_distinct(),
+                            .name("GuildAction")
+                            .col(GuildPolicy::GuildId)
+                            .col(GuildPolicy::Action),
                     )
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        // ChannelPolicy table
+        manager
+            .create_table(
+                Table::create()
+                    .table(ChannelPolicy::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ChannelPolicy::Id)
+                            .integer()
+                            .auto_increment()
+                            .primary_key()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ChannelPolicy::ChannelId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(ChannelPolicy::Action).string().not_null())
+                    .col(
+                        ColumnDef::new(ChannelPolicy::Effect)
+                            .enumeration(Effect::Table, Effect::iter().skip(1))
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(ChannelPolicy::Until).timestamp())
+                    .index(
+                        Index::create()
+                            .unique()
+                            .name("ChannelAction")
+                            .col(ChannelPolicy::ChannelId)
+                            .col(ChannelPolicy::Action),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // RolePolicy table
+        manager
+            .create_table(
+                Table::create()
+                    .table(RolePolicy::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(RolePolicy::Id)
+                            .integer()
+                            .auto_increment()
+                            .primary_key()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(RolePolicy::RoleId).big_unsigned().not_null())
+                    .col(
+                        ColumnDef::new(RolePolicy::GuildId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(RolePolicy::Action).string().not_null())
+                    .col(
+                        ColumnDef::new(RolePolicy::Effect)
+                            .enumeration(Effect::Table, Effect::iter().skip(1))
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(RolePolicy::Until).timestamp())
+                    .index(
+                        Index::create()
+                            .unique()
+                            .name("RoleAction")
+                            .col(RolePolicy::RoleId)
+                            .col(RolePolicy::Action),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .table(RolePolicy::Table)
+                    .name("RoleGuild")
+                    .col(RolePolicy::GuildId)
+                    .to_owned(),
+            )
+            .await?;
+
+        // MemberPolicy table
+        manager
+            .create_table(
+                Table::create()
+                    .table(MemberPolicy::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(MemberPolicy::Id)
+                            .integer()
+                            .auto_increment()
+                            .primary_key()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MemberPolicy::GuildId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MemberPolicy::UserId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(MemberPolicy::Action).string().not_null())
+                    .col(
+                        ColumnDef::new(MemberPolicy::Effect)
+                            .enumeration(Effect::Table, Effect::iter().skip(1))
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(MemberPolicy::Until).timestamp())
+                    .index(
+                        Index::create()
+                            .unique()
+                            .name("MemberAction")
+                            .col(MemberPolicy::GuildId)
+                            .col(MemberPolicy::UserId)
+                            .col(MemberPolicy::Action),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Permission::Table).to_owned())
+            .drop_table(Table::drop().table(GuildPolicy::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(ChannelPolicy::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("RoleGuild")
+                    .table(RolePolicy::Table)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(RolePolicy::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(MemberPolicy::Table).to_owned())
             .await?;
 
         manager
@@ -65,14 +213,44 @@ impl MigrationTrait for Migration {
     }
 }
 
-/// Learn more at https://docs.rs/sea-query#iden
 #[derive(DeriveIden)]
-enum Permission {
+enum GuildPolicy {
     Table,
     Id,
-    UserId,
+    GuildId,
+    Action,
+    Effect,
+    Until,
+}
+
+#[derive(DeriveIden)]
+enum ChannelPolicy {
+    Table,
+    Id,
+    ChannelId,
+    Action,
+    Effect,
+    Until,
+}
+
+#[derive(DeriveIden)]
+enum RolePolicy {
+    Table,
+    Id,
     RoleId,
     GuildId,
+    // Store guild for easy lookup
+    Action,
+    Effect,
+    Until,
+}
+
+#[derive(DeriveIden)]
+enum MemberPolicy {
+    Table,
+    Id,
+    GuildId,
+    UserId,
     Action,
     Effect,
     Until,

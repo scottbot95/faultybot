@@ -1,7 +1,7 @@
 mod channel_settings;
 pub(crate) mod config;
-pub mod merge_strategies;
 pub(crate) mod manager;
+pub mod merge_strategies;
 
 use poise::serenity_prelude::{ChannelId, GuildId, Mentionable, UserId};
 use serde::de::DeserializeOwned;
@@ -20,7 +20,9 @@ impl std::fmt::Display for SettingsScopeKind {
             SettingsScopeKind::Global => write!(f, "Global"),
             SettingsScopeKind::Guild(_) => write!(f, "this server"),
             SettingsScopeKind::Channel(channel_id) => write!(f, "{}", channel_id.mention()),
-            SettingsScopeKind::Member(_, user_id) => write!(f, "{} in this server", user_id.mention()),
+            SettingsScopeKind::Member(_, user_id) => {
+                write!(f, "{} in this server", user_id.mention())
+            }
         }
     }
 }
@@ -69,7 +71,6 @@ where
     }
 }
 
-
 fn merge_values<T: DeserializeOwned>(
     merge: &impl MergeFn<T>,
     lhs: SettingsValue<T>,
@@ -80,7 +81,7 @@ fn merge_values<T: DeserializeOwned>(
         (Some(lhs_val), Some(rhs_val)) => match merge.merge(lhs_val, rhs_val) {
             MergeDecision::Left => lhs,
             MergeDecision::Right => rhs,
-        }
+        },
         (_, _) => lhs,
     }
 }
