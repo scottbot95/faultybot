@@ -18,9 +18,12 @@ impl CooldownError {
     }
 }
 
-#[derive(Debug, Display, Clone)]
+#[derive(Debug, Display)]
 pub enum FaultyBotError {
     InvalidInputError(String),
+    AccessDenied {
+        reason: String
+    },
 }
 
 impl std::error::Error for FaultyBotError {}

@@ -12,7 +12,7 @@ pub struct Model {
     pub user_id: i64,
     pub action: String,
     pub effect: Effect,
-    pub until: Option<DateTime>,
+    pub until: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

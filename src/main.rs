@@ -21,9 +21,10 @@ use std::time::Duration;
 use tracing::{error, info};
 
 use crate::settings::config::FaultybotConfig;
-use settings::manager::SettingsManager;
 use poise::serenity_prelude as serenity;
+use settings::manager::SettingsManager;
 use tracing_subscriber::EnvFilter;
+use crate::permissions::PermissionsManager;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -31,10 +32,8 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 // Custom user data passed to all command functions
 pub struct Data {
     handler: handler::Handler,
-    #[allow(dead_code)]
-    db: database::Database,
-    #[allow(dead_code)]
     settings_manager: SettingsManager,
+    permissions_manager: PermissionsManager,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -103,13 +102,13 @@ async fn main() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
-                    db: db.clone(),
-                    handler: handler::Handler::new(crate::util::CooldownConfig {
+                    handler: handler::Handler::new(poise::CooldownConfig {
                         user: Some(Duration::from_secs(10)),
                         guild: Some(Duration::from_secs(5)),
                         ..Default::default()
                     }),
-                    settings_manager: settings::manager::SettingsManager::new(config, db),
+                    settings_manager: SettingsManager::new(config, db.clone()),
+                    permissions_manager: PermissionsManager::new(db),
                 })
             })
         })

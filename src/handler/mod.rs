@@ -9,16 +9,16 @@ use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
 
+const COOLDOWN_KEY: &str = "chat.cooldown";
+
 pub(crate) struct Handler {
-    cooldowns: RwLock<crate::util::Cooldowns<Data, Error>>,
+    cooldowns: RwLock<poise::Cooldowns>,
 }
 
 impl Handler {
-    pub fn new(default_config: crate::util::CooldownConfig) -> Self {
+    pub fn new(default_config: poise::CooldownConfig) -> Self {
         Self {
-            cooldowns: RwLock::new(crate::util::Cooldowns::new(SettingsCooldownProvider {
-                default_config,
-            })),
+            cooldowns: RwLock::new(poise::Cooldowns::new(default_config)),
         }
     }
 
@@ -76,19 +76,23 @@ impl Handler {
             return Ok(());
         }
 
-        let cd_ctx = crate::util::CooldownContext {
+        let cd_ctx = poise::CooldownContext {
             user_id: new_message.author.id,
             guild_id: new_message.guild_id,
             channel_id: new_message.channel_id,
         };
 
         {
+            let new_config = self.get_config(cd_ctx.clone(), framework.user_data).await?;
+            self.cooldowns.write().await.set_config(new_config);
+        }
+
+        {
             let time_remaining = self
                 .cooldowns
                 .read()
                 .await
-                .remaining_cooldown(cd_ctx, framework.user_data)
-                .await?;
+                .remaining_cooldown(cd_ctx.clone());
             if let Some(time_remaining) = time_remaining {
                 return Err(CooldownError::new(time_remaining).into());
             }
@@ -109,14 +113,7 @@ impl Handler {
         histogram!("gpt_response_seconds", duration.as_secs_f64());
 
         {
-            self.cooldowns
-                .write()
-                .await
-                .start_cooldown(crate::util::CooldownContext {
-                    user_id: new_message.author.id,
-                    guild_id: new_message.guild_id,
-                    channel_id: new_message.channel_id,
-                });
+            self.cooldowns.write().await.start_cooldown(cd_ctx);
         }
 
         Ok(())
@@ -161,13 +158,50 @@ impl Handler {
 
         panic!("FaultyBot does not support GPT function calls (yet?)")
     }
+
+    async fn get_config(
+        &self,
+        ctx: poise::CooldownContext,
+        user_data: &Data,
+    ) -> Result<poise::CooldownConfig, Error> {
+        let config = poise::CooldownConfig {
+            global: user_data
+                .settings_manager
+                .get_global(COOLDOWN_KEY)?
+                .map(Duration::from_secs_f32),
+            // don't support bot-wide per-user settings. You can have settings unique to DMs by channel though
+            user: None,
+            guild: match ctx.guild_id {
+                Some(guild_id) => user_data
+                    .settings_manager
+                    .get_guild(guild_id, COOLDOWN_KEY)
+                    .await?
+                    .map(Duration::from_secs_f32),
+                None => None,
+            },
+            channel: user_data
+                .settings_manager
+                .get_channel(ctx.channel_id, COOLDOWN_KEY)
+                .await?
+                .map(Duration::from_secs_f32),
+            member: match ctx.guild_id {
+                Some(guild_id) => user_data
+                    .settings_manager
+                    .get_member(guild_id, ctx.user_id, COOLDOWN_KEY)
+                    .await?
+                    .map(Duration::from_secs_f32),
+                None => None,
+            },
+            __non_exhaustive: (),
+        };
+
+        Ok(config)
+    }
 }
 
 struct SettingsCooldownProvider {
     default_config: crate::util::CooldownConfig,
 }
-
-const COOLDOWN_KEY: &str = "chat.cooldown";
 
 #[poise::async_trait]
 impl crate::util::CooldownConfigProvider<Data, Error> for SettingsCooldownProvider {

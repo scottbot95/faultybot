@@ -41,7 +41,7 @@ impl MigrationTrait for Migration {
                             .enumeration(Effect::Table, Effect::iter().skip(1))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(GuildPolicy::Until).timestamp())
+                    .col(ColumnDef::new(GuildPolicy::Until).timestamp_with_time_zone())
                     .index(
                         Index::create()
                             .unique()
@@ -77,7 +77,7 @@ impl MigrationTrait for Migration {
                             .enumeration(Effect::Table, Effect::iter().skip(1))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(ChannelPolicy::Until).timestamp())
+                    .col(ColumnDef::new(ChannelPolicy::Until).timestamp_with_time_zone())
                     .index(
                         Index::create()
                             .unique()
@@ -114,7 +114,7 @@ impl MigrationTrait for Migration {
                             .enumeration(Effect::Table, Effect::iter().skip(1))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(RolePolicy::Until).timestamp())
+                    .col(ColumnDef::new(RolePolicy::Until).timestamp_with_time_zone())
                     .index(
                         Index::create()
                             .unique()
@@ -165,7 +165,7 @@ impl MigrationTrait for Migration {
                             .enumeration(Effect::Table, Effect::iter().skip(1))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(MemberPolicy::Until).timestamp())
+                    .col(ColumnDef::new(MemberPolicy::Until).timestamp_with_time_zone())
                     .index(
                         Index::create()
                             .unique()
