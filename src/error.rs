@@ -20,10 +20,19 @@ impl CooldownError {
 
 #[derive(Debug, Display)]
 pub enum FaultyBotError {
-    InvalidInputError(String),
+    InvalidInput(String),
     AccessDenied {
         reason: String
     },
 }
 
 impl std::error::Error for FaultyBotError {}
+
+impl FaultyBotError {
+    pub fn invalid_input<T: Into<String>>(msg: T) -> Self {
+        Self::InvalidInput(msg.into())
+    }
+    pub fn access_denied<T: Into<String>>(reason: T) -> Self {
+        Self::AccessDenied { reason: reason.into() }
+    }
+}

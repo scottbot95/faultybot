@@ -20,19 +20,21 @@ impl PermissionsManager {
 
     pub async fn enforce(
         &self,
+        cache: impl AsRef<poise::serenity_prelude::Cache> + Send,
         user_id: UserId,
         channel_id: ChannelId,
         guild_id: Option<GuildId>,
-        action: &str,
+        action: impl Into<String>,
     ) -> Result<(), Error> {
         let ctx = policy::PolicyContext {
             guild_id,
-            channel_id,
+            channel_id: Some(channel_id),
             roles: vec![],
-            user_id,
+            user_id: Some(user_id),
         };
+
         let policy = self.policy_manager
-            .effective_policy(ctx, action)
+            .effective_policy(cache, ctx, action.into())
             .await?;
 
         match policy.effect {
@@ -43,5 +45,10 @@ impl PermissionsManager {
             }.into())
         }
     }
+}
 
+impl AsRef<PolicyManager> for PermissionsManager {
+    fn as_ref(&self) -> &PolicyManager {
+        &self.policy_manager
+    }
 }

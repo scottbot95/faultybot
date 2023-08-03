@@ -1,6 +1,7 @@
 use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
 use sea_orm::{ActiveValue, ColumnTrait, EntityName, EntityTrait, IntoActiveValue, QueryFilter, sea_query};
 use sea_orm::sea_query::OnConflict;
+use entities::sea_orm_active_enums::Effect as DbEffect;
 use entities::{channel_policy, guild_policy, member_policy, role_policy};
 use crate::Error;
 use crate::error::FaultyBotError;
@@ -16,75 +17,116 @@ impl PolicyManager {
         Self { db }
     }
 
-    pub async fn save_policy(&self, policy: Policy) -> Result<(), Error> {
-        use entities::sea_orm_active_enums::Effect;
+    pub async fn save_policy(&self, policy: &Policy) -> Result<(), Error> {
         match policy.principle {
             Principle::Global => {
-                let msg = "Changing global bot permissions not currently supported".to_string();
-                return Err(FaultyBotError::InvalidInputError(msg).into());
+                let msg = "Changing global bot permissions not currently supported";
+                return Err(FaultyBotError::invalid_input(msg).into());
             }
-            Principle::Guild(guild_id) => {
-                guild_policy::Entity::insert(guild_policy::ActiveModel {
-                    guild_id: guild_id.to_i64().into_active_value(),
-                    action: policy.action.into_active_value(),
-                    effect: ActiveValue::Set(Effect::from(policy.effect)),
-                    until: policy.until.into_active_value(),
-                    ..Default::default()
-                }).on_conflict(OnConflict::columns([guild_policy::Column::GuildId, guild_policy::Column::Action])
-                        .update_columns([guild_policy::Column::Effect, guild_policy::Column::Until])
-                        .to_owned())
-                    .exec(self.db.connection())
-                    .await?;
-            }
-            Principle::Channel(channel_id) => {
-                channel_policy::Entity::insert(channel_policy::ActiveModel {
-                    channel_id: channel_id.to_i64().into_active_value(),
-                    action: policy.action.into_active_value(),
-                    effect: ActiveValue::Set(Effect::from(policy.effect)),
-                    until: policy.until.into_active_value(),
-                    ..Default::default()
-                }).on_conflict(OnConflict::columns([channel_policy::Column::ChannelId, channel_policy::Column::Action])
-                    .update_columns([channel_policy::Column::Effect, channel_policy::Column::Until])
-                    .to_owned())
-                    .exec(self.db.connection())
-                    .await?;
-            }
-            Principle::Role(role_id) => {
-                role_policy::Entity::insert(role_policy::ActiveModel {
-                    role_id: role_id.to_i64().into_active_value(),
-                    action: policy.action.into_active_value(),
-                    effect: ActiveValue::Set(Effect::from(policy.effect)),
-                    until: policy.until.into_active_value(),
-                    ..Default::default()
-                }).on_conflict(OnConflict::columns([role_policy::Column::RoleId, role_policy::Column::Action])
-                    .update_columns([role_policy::Column::Effect, role_policy::Column::Until])
-                    .to_owned())
-                    .exec(self.db.connection())
-                    .await?;
-            }
-            Principle::Member(guild_id, user_id) => {
-                member_policy::Entity::insert(member_policy::ActiveModel {
-                    guild_id: guild_id.to_i64().into_active_value(),
-                    user_id: user_id.to_i64().into_active_value(),
-                    action: policy.action.into_active_value(),
-                    effect: ActiveValue::Set(Effect::from(policy.effect)),
-                    until: policy.until.into_active_value(),
-                    ..Default::default()
-                }).on_conflict(OnConflict::columns([member_policy::Column::GuildId, member_policy::Column::UserId, member_policy::Column::Action])
-                    .update_columns([member_policy::Column::Effect, member_policy::Column::Until])
-                    .to_owned())
-                    .exec(self.db.connection())
-                    .await?;
-            }
-        }
+            Principle::Guild(guild_id) => self.save_guild_policy(policy.clone(), guild_id).await?,
+            Principle::Channel(channel_id) => self.save_channel_policy(policy.clone(), channel_id).await?,
+            Principle::Role(role_id) => self.save_role_policy(policy.clone(), role_id).await?,
+            Principle::Member(guild_id, user_id) => self.save_member_policy(policy.clone(), guild_id, user_id).await?,
+        };
 
+        Ok(())
+    }
+
+    pub async fn clear_policy(&self, principle: Principle, action: String) -> Result<(), Error> {
+        match principle {
+            Principle::Guild(guild_id) => guild_policy::Entity::delete_many()
+                .filter(guild_policy::Column::GuildId.eq(guild_id.to_i64()))
+                .filter(guild_policy::Column::Action.eq(action))
+                .exec(self.db.connection())
+                .await?,
+            Principle::Channel(channel_id) => channel_policy::Entity::delete_many()
+                .filter(channel_policy::Column::ChannelId.eq(channel_id.to_i64()))
+                .filter(channel_policy::Column::Action.eq(action))
+                .exec(self.db.connection())
+                .await?,
+            Principle::Role(role_id) => role_policy::Entity::delete_many()
+                .filter(role_policy::Column::RoleId.eq(role_id.to_i64()))
+                .filter(role_policy::Column::Action.eq(action))
+                .exec(self.db.connection())
+                .await?,
+            Principle::Member(guild_id, user_id) =>
+                member_policy::Entity::delete_many()
+                    .filter(member_policy::Column::GuildId.eq(guild_id.to_i64()))
+                    .filter(member_policy::Column::UserId.eq(user_id.to_i64()))
+                    .filter(member_policy::Column::Action.eq(action))
+                    .exec(self.db.connection())
+                    .await?,
+            Principle::Global => return Err(FaultyBotError::access_denied("Cannot modify global policies").into())
+        };
+
+        Ok(())
+    }
+
+    async fn save_member_policy(&self, policy: Policy, guild_id: GuildId, user_id: UserId) -> Result<(), Error> {
+        member_policy::Entity::insert(member_policy::ActiveModel {
+            guild_id: guild_id.to_i64().into_active_value(),
+            user_id: user_id.to_i64().into_active_value(),
+            action: policy.action.into_active_value(),
+            effect: ActiveValue::Set(DbEffect::from(policy.effect)),
+            until: policy.until.into_active_value(),
+            ..Default::default()
+        }).on_conflict(OnConflict::columns([member_policy::Column::GuildId, member_policy::Column::UserId, member_policy::Column::Action])
+            .update_columns([member_policy::Column::Effect, member_policy::Column::Until])
+            .to_owned())
+            .exec(self.db.connection())
+            .await?;
+        Ok(())
+    }
+
+    async fn save_role_policy(&self, policy: Policy, role_id: RoleId) -> Result<(), Error> {
+        role_policy::Entity::insert(role_policy::ActiveModel {
+            role_id: role_id.to_i64().into_active_value(),
+            action: policy.action.into_active_value(),
+            effect: ActiveValue::Set(DbEffect::from(policy.effect)),
+            until: policy.until.into_active_value(),
+            ..Default::default()
+        }).on_conflict(OnConflict::columns([role_policy::Column::RoleId, role_policy::Column::Action])
+            .update_columns([role_policy::Column::Effect, role_policy::Column::Until])
+            .to_owned())
+            .exec(self.db.connection())
+            .await?;
+        Ok(())
+    }
+
+    async fn save_channel_policy(&self, policy: Policy, channel_id: ChannelId) -> Result<(), Error> {
+        channel_policy::Entity::insert(channel_policy::ActiveModel {
+            channel_id: channel_id.to_i64().into_active_value(),
+            action: policy.action.into_active_value(),
+            effect: ActiveValue::Set(DbEffect::from(policy.effect)),
+            until: policy.until.into_active_value(),
+            ..Default::default()
+        }).on_conflict(OnConflict::columns([channel_policy::Column::ChannelId, channel_policy::Column::Action])
+            .update_columns([channel_policy::Column::Effect, channel_policy::Column::Until])
+            .to_owned())
+            .exec(self.db.connection())
+            .await?;
+        Ok(())
+    }
+
+    async fn save_guild_policy(&self, policy: Policy, guild_id: GuildId) -> Result<(), Error> {
+        guild_policy::Entity::insert(guild_policy::ActiveModel {
+            guild_id: guild_id.to_i64().into_active_value(),
+            action: policy.action.into_active_value(),
+            effect: ActiveValue::Set(DbEffect::from(policy.effect)),
+            until: policy.until.into_active_value(),
+            ..Default::default()
+        }).on_conflict(OnConflict::columns([guild_policy::Column::GuildId, guild_policy::Column::Action])
+            .update_columns([guild_policy::Column::Effect, guild_policy::Column::Until])
+            .to_owned())
+            .exec(self.db.connection())
+            .await?;
         Ok(())
     }
 }
 
 #[poise::async_trait]
 impl PolicyProvider<Error> for PolicyManager {
-    async fn guild_policies(&self, guild_id: GuildId, action: &str) -> Result<Vec<Policy>, Error> {
+    async fn guild_policies(&self, guild_id: GuildId, action: String) -> Result<Vec<Policy>, Error> {
         let policies = guild_policy::Entity::find()
             .filter(build_like(guild_policy::Entity, action))
             .filter(guild_policy::Column::GuildId.eq(guild_id.to_i64()))
@@ -97,7 +139,7 @@ impl PolicyProvider<Error> for PolicyManager {
         Ok(policies)
     }
 
-    async fn channel_policies(&self, channel_id: ChannelId, action: &str) -> Result<Vec<Policy>, Error> {
+    async fn channel_policies(&self, channel_id: ChannelId, action: String) -> Result<Vec<Policy>, Error> {
         let policies = channel_policy::Entity::find()
             .filter(build_like(channel_policy::Entity, action))
             .filter(channel_policy::Column::ChannelId.eq(channel_id.to_i64()))
@@ -111,7 +153,7 @@ impl PolicyProvider<Error> for PolicyManager {
     }
 
 
-    async fn role_policies(&self, role_id: RoleId, action: &str) -> Result<Vec<Policy>, Error> {
+    async fn role_policies(&self, role_id: RoleId, action: String) -> Result<Vec<Policy>, Error> {
         let policies = role_policy::Entity::find()
             .filter(build_like(role_policy::Entity, action))
             .filter(role_policy::Column::RoleId.eq(role_id.to_i64()))
@@ -124,7 +166,7 @@ impl PolicyProvider<Error> for PolicyManager {
         Ok(policies)
     }
 
-    async fn member_policies(&self, guild_id: GuildId, user_id: UserId, action: &str) -> Result<Vec<Policy>, Error> {
+    async fn member_policies(&self, guild_id: GuildId, user_id: UserId, action: String) -> Result<Vec<Policy>, Error> {
         let policies = member_policy::Entity::find()
             .filter(build_like(member_policy::Entity, action))
             .filter(member_policy::Column::GuildId.eq(guild_id.to_i64()))
@@ -139,7 +181,7 @@ impl PolicyProvider<Error> for PolicyManager {
     }
 }
 
-fn build_like(entity: impl EntityName, action: &str) -> sea_query::SimpleExpr {
+fn build_like(entity: impl EntityName, action: String) -> sea_query::SimpleExpr {
     let expr = format!(r#"$1 LIKE "{}"."action" || '%'"#, entity.table_name());
 
     sea_query::Expr::cust_with_values(expr, [ action ])
