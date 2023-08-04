@@ -2,6 +2,7 @@ use crate::error::FaultyBotError;
 use crate::settings::{SettingsContext, SettingsScopeKind, SettingsValue};
 use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, UserId};
+use crate::permissions::validate_access;
 
 /// Manage settings for a specific scope
 #[poise::command(slash_command, subcommands("get", "set", "unset"))]
@@ -24,6 +25,8 @@ async fn set(
     #[description = "JSON encoded value. (text must be wrapped in quotes)"]
     value: serde_json::Value,
 ) -> Result<(), Error> {
+    validate_access(&ctx, format!("settings.set:{}", key)).await?;
+    
     let settings_manager = &ctx.data().settings_manager;
     let updated_scope = match (channel, user) {
         (Some(_), Some(_)) => {
@@ -85,6 +88,7 @@ async fn unset(
     #[description = "User setting will be scoped to"] user: Option<UserId>,
     key: String,
 ) -> Result<(), Error> {
+    validate_access(&ctx, format!("settings.set:{}", key)).await?;
     let settings_manager = &ctx.data().settings_manager;
 
     let updated_scope = match (channel, user) {
@@ -145,6 +149,7 @@ async fn get(
     guild: Option<bool>,
     key: String,
 ) -> Result<(), Error> {
+    validate_access(&ctx, "settings.get").await?;
     let settings_manager = &ctx.data().settings_manager;
     let key = key.as_str();
     let setting: SettingsValue<serde_json::Value> = match (channel, user, guild.unwrap_or(false)) {

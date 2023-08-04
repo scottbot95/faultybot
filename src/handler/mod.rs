@@ -4,12 +4,37 @@ use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{debug, error, info};
 
-use crate::error::CooldownError;
+use crate::error::{CooldownError, FaultyBotError};
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
 
 const COOLDOWN_KEY: &str = "chat.cooldown";
+
+pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(), Error> {
+    match error {
+        poise::FrameworkError::Command { ctx, error , .. } => {
+            match error.downcast::<FaultyBotError>() {
+                Ok(error) => {
+                    // FaultyBotErrors are user errors and just need to be told to the user
+                    let error = error.to_string();
+                    ctx.send( |b| b.content(error).ephemeral(true)).await?;
+                }
+                Err(error) => {
+                    // Any other error means something went wrong while executing the command
+                    // Apologize to user and log
+                    tracing::error!("An error occured in a command: {}", error);
+
+                    ctx.send(|b| b.content("Oops! Something went wrong! :(").ephemeral(true)).await?;
+                }
+            }
+
+        },
+        error => poise::builtins::on_error(error).await?
+    };
+
+    Ok(())
+}
 
 pub(crate) struct Handler {
     cooldowns: RwLock<poise::Cooldowns>,
@@ -72,9 +97,15 @@ impl Handler {
         }
 
         // Only reply to DMs and direct mentions
-        if new_message.guild_id.is_some() && !new_message.mentions_me(ctx.clone()).await? {
+        if new_message.guild_id.is_some() && !new_message.mentions_user_id(framework.bot_id) {
             return Ok(());
         }
+
+        // validate access
+        framework.user_data
+            .permissions_manager
+            .enforce(new_message.author.id, new_message.channel_id, new_message.guild_id, "chat")
+            .await?;
 
         let cd_ctx = poise::CooldownContext {
             user_id: new_message.author.id,

@@ -2,6 +2,8 @@ use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, RoleId, UserId};
 use crate::error::FaultyBotError;
 use crate::permissions::policy::{Effect, Policy, PolicyContext, PolicyProvider, Principle};
+use crate::permissions::validate_access;
+
 
 /// Manage permissions for a given principle
 #[poise::command(slash_command, subcommands("get", "set"))]
@@ -30,6 +32,8 @@ async fn set(
     #[description = "UTC Timestamp until the granted permissions expire (eg '2018-01-01 12:53:00'). Exclusive with `for`"]
     until: Option<humantime::Timestamp>,
 ) -> Result<(), Error> {
+    validate_access(&ctx, format!("permissions.set:{}", action)).await?;
+
     let policy_manager = ctx.data()
         .permissions_manager
         .as_ref();
@@ -83,6 +87,7 @@ async fn get(
     #[description = "Action to manage permissions for"]
     action: String,
 ) -> Result<(), Error> {
+    validate_access(&ctx, "permissions.get").await?;
     let policy_ctx = PolicyContext {
         guild_id: ctx.guild_id(),
         user_id: user,

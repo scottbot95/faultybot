@@ -20,7 +20,9 @@ impl CooldownError {
 
 #[derive(Debug, Display)]
 pub enum FaultyBotError {
+    #[display(fmt = "Invalid input: {}", "0")]
     InvalidInput(String),
+    #[display(fmt = "Access denied: {}", "reason")]
     AccessDenied {
         reason: String
     },

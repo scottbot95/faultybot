@@ -88,6 +88,13 @@ async fn main() {
                     Ok(())
                 })
             },
+            on_error: |error| {
+                Box::pin(async move {
+                    if let Err(e) = handler::on_error(error).await {
+                        tracing::error!("Error while handling error: {}", e);
+                    }
+                })
+            },
             prefix_options: poise::PrefixFrameworkOptions {
                 mention_as_prefix: false, // Disable mentions since we handle those directly
                 ..Default::default()
@@ -108,7 +115,11 @@ async fn main() {
                         ..Default::default()
                     }),
                     settings_manager: SettingsManager::new(config, db.clone()),
-                    permissions_manager: PermissionsManager::new(db),
+                    permissions_manager: PermissionsManager::new(
+                        db,
+                        ctx.clone(),
+                        framework.options().owners.clone()
+                    ),
                 })
             })
         })
