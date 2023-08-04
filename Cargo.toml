@@ -56,8 +56,10 @@ features = [ "future" ]
 [dependencies.poise]
 #git = "https://github.com/serenity-rs/poise.git"
 #branch = "next"
-#version = "0.5.5"
-path = "../poise"
+git = "https://github.com/scottbot95/poise.git"
+branch = "cd-config-provider"
+version = "0.5.5"
+#path = "../poise"
 
 [dependencies.openai]
 version = "1.0.0-alpha.8"

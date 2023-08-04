@@ -2203,6 +2203,7 @@ checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 [[package]]
 name = "poise"
 version = "0.5.5"
+source = "git+https://github.com/scottbot95/poise.git?branch=cd-config-provider#066fc0875424b68ab348afb8cb9bb4852f8dc81b"
 dependencies = [
  "async-trait",
  "derivative",
@@ -2220,6 +2221,7 @@ dependencies = [
 [[package]]
 name = "poise_macros"
 version = "0.5.5"
+source = "git+https://github.com/scottbot95/poise.git?branch=cd-config-provider#066fc0875424b68ab348afb8cb9bb4852f8dc81b"
 dependencies = [
  "darling",
  "proc-macro2",
