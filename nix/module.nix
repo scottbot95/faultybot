@@ -27,6 +27,7 @@ in
     ansi_colors = mkEnableOption "ANSI colors in log output";
     log_level = mkOption {
       type = types.str;
+      default = "info";
       description = mdDoc """
         Controls the log level.
 
