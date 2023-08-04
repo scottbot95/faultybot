@@ -25,6 +25,16 @@ in
       example = "/run/secrets/faultybot.env";
     };
     ansi_colors = mkEnableOption "ANSI colors in log output";
+    log_level = mkOption {
+      type = types.str;
+      description = mdDoc """
+        Controls the log level.
+
+        See [tracing-subscriber's EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
+        for details
+      """;
+      example = "warn,faultybot=info";
+    };
     metrics = {
       statsd = {
         enable = mkEnableOption "statsd metrics exporter";
@@ -91,6 +101,10 @@ in
         ExecStart = "${cfg.package}/bin/faultybot -c ${faultybotConfig}";
         EnvironmentFile = "-${cfg.envfile}";
         Restart = "always";
+      };
+
+      environment = {
+        RUST_LOG = cfg.log_level;
       };
     };
 
