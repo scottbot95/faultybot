@@ -6,6 +6,17 @@ use crate::permissions::validate_access;
 
 
 /// Manage permissions for a given principle
+///
+/// Permissions are prefixed matched so groups of permissions can be assigned at once.
+/// (eg, `permissions` allows both `permissions.get` and `permissions.set`)
+///
+/// Available permissions:
+/// - `chat`: Ability to chat with FaultyBot via @mentions
+/// - `permissions.get`: Ability to use `/permissions get`
+/// - `permissions.set:<permission>`: Ability to manage a permission via `/permissions set` for a specific permission
+/// - `settings.get`: Ability to use `/settings get`
+/// - `settings.set:<setting>`: Ability to use `/settings set` for a specific setting
+/// - `settings.unset:<setting>`: Ability to use `/settings unset` for a specific setting
 #[poise::command(slash_command, subcommands("get", "set"))]
 pub async fn permissions(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())

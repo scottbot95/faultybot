@@ -2,8 +2,7 @@ pub mod policy_manager;
 pub mod policy;
 
 use std::collections::HashSet;
-use std::sync::Arc;
-use crate::{Data, Error};
+use crate::{Error};
 use poise::serenity_prelude as serenity;
 use serenity::{ChannelId, GuildId, UserId};
 use crate::error::FaultyBotError;

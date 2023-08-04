@@ -5,6 +5,9 @@ use poise::serenity_prelude::{ChannelId, UserId};
 use crate::permissions::validate_access;
 
 /// Manage settings for a specific scope
+///
+/// Available settings:
+/// - `chat.cooldown`: Cooldown between chat responses from FaultyBot
 #[poise::command(slash_command, subcommands("get", "set", "unset"))]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -26,7 +29,7 @@ async fn set(
     value: serde_json::Value,
 ) -> Result<(), Error> {
     validate_access(&ctx, format!("settings.set:{}", key)).await?;
-    
+
     let settings_manager = &ctx.data().settings_manager;
     let updated_scope = match (channel, user) {
         (Some(_), Some(_)) => {
