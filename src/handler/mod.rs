@@ -10,13 +10,14 @@ use crate::permissions::Permission;
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
+use crate::util::AuditInfo;
 
 const COOLDOWN_KEY: &str = "chat.cooldown";
 
 pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(), Error> {
     match error {
         poise::FrameworkError::Command { ctx, error, .. } => {
-            handle_error(error, |msg| async move {
+            handle_error(error, (&ctx).into(), |msg| async move {
                 ctx.send(|b| b.content(msg).ephemeral(true)).await?;
                 Ok(())
             })
@@ -31,19 +32,20 @@ pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(
     Ok(())
 }
 
-async fn handle_error<F, Fut>(error: FaultyBotError, send_message: F) -> Result<(), serenity::Error>
+async fn handle_error<F, Fut>(error: FaultyBotError, audit_info: AuditInfo, send_message: F) -> Result<(), serenity::Error>
 where
     Fut: Future<Output = Result<(), serenity::Error>>,
     F: FnOnce(String) -> Fut,
 {
+    let metric_labels = audit_info.as_metric_labels();
     match error {
         FaultyBotError::User(error) => {
-            increment_counter!("user_errors_total", "user_id" => error.user().to_string());
+            increment_counter!("user_errors_total", &metric_labels);
             let error = error.to_string();
             send_message(error).await?;
         }
         _ => {
-            increment_counter!("errors_total");
+            increment_counter!("errors_total", &metric_labels);
             // Any other error means something went wrong while executing the command
             // Apologize to user and log
             tracing::error!("An error occured in a command: {}", error);
@@ -85,7 +87,7 @@ impl Handler {
                     .handle_message(ctx.clone(), framework, new_message.clone())
                     .await;
                 if let Err(err) = result {
-                    handle_error(err, |msg| async move {
+                    handle_error(err, new_message.into(), |msg| async move {
                         new_message.reply(ctx, msg).await?;
                         Ok(())
                     })
@@ -155,7 +157,8 @@ impl Handler {
             .await
             .unwrap_or_else(|| new_message.author.name.clone());
 
-        increment_counter!("gpt_requests_total", "user_id" => new_message.author.id.to_string());
+        let metric_labels = AuditInfo::from(&new_message).as_metric_labels();
+        increment_counter!("gpt_requests_total", &metric_labels);
 
         debug!(
             "Received message from {}: `{}`",
@@ -165,18 +168,18 @@ impl Handler {
         let result = Self::reply_with_gpt_completion(&ctx, &new_message).await;
 
         if let Err(err) = result {
-            increment_counter!("gpt_errors_total", "user_id" => new_message.author.id.to_string());
+            increment_counter!("gpt_errors_total", &metric_labels);
             error!("Failed to send reply: {}", err);
         } else {
-            increment_counter!("gpt_responses_total", "user_id" => new_message.author.id.to_string());
+            increment_counter!("gpt_responses_total", &metric_labels);
         }
 
         let delay =
             serenity::Timestamp::now().fixed_offset() - new_message.timestamp.fixed_offset();
         let delay = delay.to_std().unwrap(); // duration can never be negative unless users send message in the future
         let duration = start.elapsed();
-        histogram!("gpt_response_seconds", duration.as_secs_f64());
-        histogram!("gpt_response_delay_seconds", delay.as_secs_f64());
+        histogram!("gpt_response_seconds", duration.as_secs_f64(), &metric_labels);
+        histogram!("gpt_response_delay_seconds", delay.as_secs_f64(), &metric_labels);
 
         {
             self.cooldowns.write().await.start_cooldown(cd_ctx);
