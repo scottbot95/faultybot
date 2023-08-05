@@ -234,12 +234,12 @@ enum ChannelPolicy {
 }
 
 #[derive(DeriveIden)]
-enum RolePolicy {
+pub(crate) enum RolePolicy {
     Table,
     Id,
     RoleId,
+    // Store guild for easy lookup (removed in future migrations)
     GuildId,
-    // Store guild for easy lookup
     Action,
     Effect,
     Until,

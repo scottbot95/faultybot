@@ -1,5 +1,6 @@
 mod m20230710_001739_create_permissions;
 mod m20230722_210640_create_settings;
+mod m20230805_205921_remove_guild_from_role;
 
 pub use sea_orm_migration::prelude::*;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20230710_001739_create_permissions::Migration),
             Box::new(m20230722_210640_create_settings::Migration),
+            Box::new(m20230805_205921_remove_guild_from_role::Migration),
         ]
     }
 }

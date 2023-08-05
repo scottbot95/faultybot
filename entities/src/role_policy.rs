@@ -9,7 +9,6 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub role_id: i64,
-    pub guild_id: i64,
     pub action: String,
     pub effect: Effect,
     pub until: Option<DateTimeWithTimeZone>,
