@@ -8,6 +8,7 @@ use crate::error::{CooldownError, FaultyBotError};
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
+use crate::permissions::Permission;
 
 const COOLDOWN_KEY: &str = "chat.cooldown";
 
@@ -104,7 +105,7 @@ impl Handler {
         // validate access
         framework.user_data
             .permissions_manager
-            .enforce(new_message.author.id, new_message.channel_id, new_message.guild_id, "chat")
+            .enforce(new_message.author.id, new_message.channel_id, new_message.guild_id, Permission::Chat)
             .await?;
 
         let cd_ctx = poise::CooldownContext {

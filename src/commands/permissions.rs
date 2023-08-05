@@ -2,7 +2,7 @@ use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, RoleId, UserId};
 use crate::error::FaultyBotError;
 use crate::permissions::policy::{Effect, Policy, PolicyContext, PolicyProvider, Principle};
-use crate::permissions::validate_access;
+use crate::permissions::{Permission, validate_access};
 
 
 /// Manage permissions for a given principle
@@ -33,8 +33,10 @@ async fn set(
     user: Option<UserId>,
     #[description = "Role permission will be scoped to"]
     role: Option<RoleId>,
-    #[description = "Action to manage permissions for"]
-    action: String,
+    #[description = "Permission to manage permissions for"]
+    permission: PermissionChoice,
+    #[description = "Extra specifier to limit permission (ie the name of a setting to grant manage for)"]
+    specifier: Option<String>,
     #[description = "Effect to apply or `Unset` to revert to default permissions"]
     effect: EffectChoice,
     #[rename = "for"]
@@ -43,7 +45,8 @@ async fn set(
     #[description = "UTC Timestamp until the granted permissions expire (eg '2018-01-01 12:53:00'). Exclusive with `for`"]
     until: Option<humantime::Timestamp>,
 ) -> Result<(), Error> {
-    validate_access(&ctx, format!("permissions.set:{}", action)).await?;
+    let action = permission.into_permission(specifier).to_string();
+    validate_access(&ctx, Permission::SetPermission(Some(action.clone()))).await?;
 
     let policy_manager = ctx.data()
         .permissions_manager
@@ -95,10 +98,13 @@ async fn get(
     user: Option<UserId>,
     #[description = "Role to fetch permissions for"]
     role: Option<RoleId>,
-    #[description = "Action to manage permissions for"]
-    action: String,
+    #[description = "Permission to manage permissions for"]
+    permission: PermissionChoice,
+    #[description = "Extra specifier to limit permission (ie the name of a setting to grant manage for)"]
+    specifier: Option<String>,
 ) -> Result<(), Error> {
-    validate_access(&ctx, "permissions.get").await?;
+    let action = permission.into_permission(specifier).to_string();
+    validate_access(&ctx, Permission::GetPermission(Some(action.clone()))).await?;
     let policy_ctx = PolicyContext {
         guild_id: ctx.guild_id(),
         user_id: user,
@@ -154,6 +160,29 @@ impl EffectChoice {
             EffectChoice::Unset => None,
             EffectChoice::Allow => Some(Effect::Allow),
             EffectChoice::Deny => Some(Effect::Deny),
+        }
+    }
+}
+
+/// Enum use for choice selection when managing permissions.
+/// Names are slightly different here to be more end-user friendly
+#[derive(poise::ChoiceParameter, derive_more::Display)]
+pub enum PermissionChoice {
+    Chat,
+    ManagePermissions,
+    GetPermissions,
+    ManageSettings,
+    GetSettings,
+}
+
+impl PermissionChoice {
+    pub fn into_permission(self, specifier: Option<String>) -> Permission {
+        match self {
+            PermissionChoice::Chat => Permission::Chat,
+            PermissionChoice::ManagePermissions => Permission::SetPermission(specifier),
+            PermissionChoice::GetPermissions => Permission::GetPermission(specifier),
+            PermissionChoice::ManageSettings => Permission::SetSetting(specifier),
+            PermissionChoice::GetSettings => Permission::GetSetting(specifier),
         }
     }
 }
