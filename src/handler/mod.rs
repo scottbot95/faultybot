@@ -166,7 +166,7 @@ impl Handler {
         let chat_completion = {
             let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id.0);
 
-            let mut chat = Chat::from(ctx, "gpt-3.5-turbo", message).await;
+            let mut chat = Chat::from(ctx, "gpt-3.5-turbo", message).await?;
 
             chat.completion().await?
         };

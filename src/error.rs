@@ -1,4 +1,4 @@
-use derive_more::{Display, Error};
+use derive_more::{Display};
 use std::time::Duration;
 
 #[derive(Debug, Display)]
