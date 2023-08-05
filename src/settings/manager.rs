@@ -70,7 +70,7 @@ impl SettingsManager {
         let val = match self.config.get(format!("global.{}", key).as_str()) {
             Ok(val) => Some(val),
             Err(::config::ConfigError::NotFound(_)) => None,
-            Err(err) => return Err(Box::new(err)),
+            Err(err) => return Err(err.into()),
         };
 
         Ok(val)

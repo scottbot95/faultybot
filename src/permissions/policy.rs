@@ -1,7 +1,7 @@
-use std::cmp::Ordering;
-use std::fmt::{Display, Formatter};
 use chrono::Utc;
 use poise::serenity_prelude::{ChannelId, GuildId, Mentionable, RoleId, UserId};
+use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Principle {
@@ -39,8 +39,12 @@ pub struct Policy {
 }
 
 impl Policy {
-    pub fn combined<I: Into<Self>>(policies: impl IntoIterator<Item=I>, cmp_role_id: impl Fn(RoleId, RoleId) -> Ordering) -> Self {
-        policies.into_iter()
+    pub fn combined<I: Into<Self>>(
+        policies: impl IntoIterator<Item = I>,
+        cmp_role_id: impl Fn(RoleId, RoleId) -> Ordering,
+    ) -> Self {
+        policies
+            .into_iter()
             .map(I::into)
             .reduce(|acc, e| acc.merge_with(e, &cmp_role_id))
             .unwrap_or_default()
@@ -52,7 +56,11 @@ impl Policy {
     /// 2. Whichever [`Policy.principle`] is greater according to [`PartialOrd`]
     /// 3. Whichever [`Principle::Role`] is greater Discord's role hierarchy
     /// 4. Otherwise, EXPLODE
-    pub fn merge_with<I: Into<Self>>(self, other: I, cmp_role_id: impl Fn(RoleId, RoleId) -> std::cmp::Ordering) -> Self {
+    pub fn merge_with<I: Into<Self>>(
+        self,
+        other: I,
+        cmp_role_id: impl Fn(RoleId, RoleId) -> std::cmp::Ordering,
+    ) -> Self {
         let other = other.into();
 
         if !other.is_valid() {
@@ -63,18 +71,20 @@ impl Policy {
             self
         } else if other.effect != self.effect {
             match (self.principle, other.principle) {
-                (Principle::Role(self_role), Principle::Role(other_role)) => match cmp_role_id(self_role, other_role) {
-                    Ordering::Less => other,
-                    Ordering::Equal => {
-                        tracing::warn!(
+                (Principle::Role(self_role), Principle::Role(other_role)) => {
+                    match cmp_role_id(self_role, other_role) {
+                        Ordering::Less => other,
+                        Ordering::Equal => {
+                            tracing::warn!(
                             "Found matching policies for same role.\nPolicy1: {:?}\nPolicy2: {:?}",
                             self, other
                         );
-                        // Just re-use exising role if they match (shouldn't be possible)}
-                        self
-                    },
-                    Ordering::Greater => self,
-                },
+                            // Just re-use exising role if they match (shouldn't be possible)}
+                            self
+                        }
+                        Ordering::Greater => self,
+                    }
+                }
                 _ => {
                     tracing::error!("Conflicting effects for policy with match specificity. Defaulting to first seen");
                     unreachable!();
@@ -83,7 +93,8 @@ impl Policy {
         } else {
             tracing::error!(
                 "Found conflicting policies.\nPolicy1: {:?}\nPolicy2: {:?}",
-                self, other
+                self,
+                other
             );
             unreachable!();
         }
@@ -120,13 +131,18 @@ pub struct PolicyContext {
 
 #[poise::async_trait]
 pub trait PolicyProvider<E> {
-
     /// Computes the effective policy for a specific interaction.
     /// Will default to [`Effect::Deny`].
     ///
     /// Guaranteed to return a policy
-    async fn effective_policy(&self, cache: impl AsRef<poise::serenity_prelude::Cache> + Send, ctx: PolicyContext, action: String) -> Result<Policy, E>
-    where E: Send + Sync + 'static
+    async fn effective_policy(
+        &self,
+        cache: impl AsRef<poise::serenity_prelude::Cache> + Send,
+        ctx: PolicyContext,
+        action: String,
+    ) -> Result<Policy, E>
+    where
+        E: Send + Sync + 'static,
     {
         // Start with default policy which denies all actions
         let mut policies = vec![Policy::default()];
@@ -139,11 +155,15 @@ pub trait PolicyProvider<E> {
             policies.extend(self.guild_policies(guild_id, action.clone()).await?);
 
             if let Some(user_id) = ctx.user_id {
-                policies.extend(self.member_policies(guild_id, user_id, action.clone()).await?);
+                policies.extend(
+                    self.member_policies(guild_id, user_id, action.clone())
+                        .await?,
+                );
             }
         }
 
-        let role_futs = ctx.roles
+        let role_futs = ctx
+            .roles
             .into_iter()
             // join_all awaits the futures in order
             // TODO could use tokio::spawn here to fetch policies across threads
@@ -163,24 +183,35 @@ pub trait PolicyProvider<E> {
                 (Some(_), None) => Ordering::Greater,
                 (None, Some(_)) => Ordering::Less,
                 (Some(lhs), Some(rhs)) => lhs.cmp(&rhs),
-                (None, None) => Ordering::Equal // Just assume equal I guess w/e
+                (None, None) => Ordering::Equal, // Just assume equal I guess w/e
             }
         });
 
         if !combined.is_valid() {
-            tracing::error!("Combining policies preferred an expired policy. {:?}", combined);
-            return Ok(Policy::default())
+            tracing::error!(
+                "Combining policies preferred an expired policy. {:?}",
+                combined
+            );
+            return Ok(Policy::default());
         }
 
         Ok(combined)
     }
 
     async fn guild_policies(&self, guild_id: GuildId, action: String) -> Result<Vec<Policy>, E>;
-    async fn channel_policies(&self, channel_id: ChannelId, action: String) -> Result<Vec<Policy>, E>;
+    async fn channel_policies(
+        &self,
+        channel_id: ChannelId,
+        action: String,
+    ) -> Result<Vec<Policy>, E>;
     async fn role_policies(&self, role_id: RoleId, action: String) -> Result<Vec<Policy>, E>;
-    async fn member_policies(&self, guild_id: GuildId, user_id: UserId, action: String) -> Result<Vec<Policy>, E>;
+    async fn member_policies(
+        &self,
+        guild_id: GuildId,
+        user_id: UserId,
+        action: String,
+    ) -> Result<Vec<Policy>, E>;
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -221,6 +252,9 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(global_deny.merge_with(global_action_allow.clone(), role_cmp), global_action_allow);
+        assert_eq!(
+            global_deny.merge_with(global_action_allow.clone(), role_cmp),
+            global_action_allow
+        );
     }
 }

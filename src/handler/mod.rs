@@ -1,43 +1,59 @@
 use crate::gpt::Chat;
 use metrics::{histogram, increment_counter};
+use std::future::Future;
 use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{debug, error, info};
 
-use crate::error::FaultyBotError;
+use crate::error::{FaultyBotError, UserError};
+use crate::permissions::Permission;
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
-use crate::permissions::Permission;
 
 const COOLDOWN_KEY: &str = "chat.cooldown";
 
 pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(), Error> {
     match error {
-        poise::FrameworkError::Command { ctx, error , .. } => {
-            match error.downcast::<FaultyBotError>() {
-                Ok(error) => {
-                    // FaultyBotErrors are user errors and just need to be told to the user
-                    let error = error.to_string();
-                    ctx.send( |b| b.content(error).ephemeral(true)).await?;
-                }
-                Err(error) => {
-                    // Any other error means something went wrong while executing the command
-                    // Apologize to user and log
-                    tracing::error!("An error occured in a command: {}", error);
-
-                    ctx.send(|b| b.content("Oops! Something went wrong! :(").ephemeral(true)).await?;
-                }
-            }
-
-        },
-        error => poise::builtins::on_error(error).await?
+        poise::FrameworkError::Command { ctx, error, .. } => {
+            handle_error(error, |msg| async move {
+                ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+                Ok(())
+            })
+            .await?;
+        }
+        error => {
+            increment_counter!("errors_total");
+            poise::builtins::on_error(error).await?
+        }
     };
 
     Ok(())
 }
 
-// async fn handle_error(ctx: poi)
+async fn handle_error<F, Fut>(error: FaultyBotError, send_message: F) -> Result<(), serenity::Error>
+where
+    Fut: Future<Output = Result<(), serenity::Error>>,
+    F: FnOnce(String) -> Fut,
+{
+    match error {
+        FaultyBotError::User(error) => {
+            increment_counter!("user_errors_total", "user_id" => error.user().to_string());
+            let error = error.to_string();
+            send_message(error).await?;
+        }
+        _ => {
+            increment_counter!("errors_total");
+            // Any other error means something went wrong while executing the command
+            // Apologize to user and log
+            tracing::error!("An error occured in a command: {}", error);
+
+            send_message("Oops! Something went wrong! :(".to_string()).await?;
+        }
+    }
+
+    Ok(())
+}
 
 pub(crate) struct Handler {
     cooldowns: RwLock<poise::Cooldowns>,
@@ -69,13 +85,11 @@ impl Handler {
                     .handle_message(ctx.clone(), framework, new_message.clone())
                     .await;
                 if let Err(err) = result {
-                    match err.downcast::<FaultyBotError>() {
-                        Ok(cd_err) => {
-                            let msg = cd_err.to_string();
-                            new_message.reply(ctx, msg).await?;
-                        }
-                        Err(err) => return Err(err),
-                    }
+                    handle_error(err, |msg| async move {
+                        new_message.reply(ctx, msg).await?;
+                        Ok(())
+                    })
+                    .await?;
                 }
             }
             _ => {}
@@ -101,9 +115,15 @@ impl Handler {
         }
 
         // validate access
-        framework.user_data
+        framework
+            .user_data
             .permissions_manager
-            .enforce(new_message.author.id, new_message.channel_id, new_message.guild_id, Permission::Chat)
+            .enforce(
+                new_message.author.id,
+                new_message.channel_id,
+                new_message.guild_id,
+                Permission::Chat,
+            )
             .await?;
 
         let cd_ctx = poise::CooldownContext {
@@ -124,23 +144,39 @@ impl Handler {
                 .await
                 .remaining_cooldown(cd_ctx.clone());
             if let Some(time_remaining) = time_remaining {
-                return Err(FaultyBotError::cooldown_hit(time_remaining).into());
+                return Err(UserError::cooldown_hit(new_message.author.id, time_remaining).into());
             }
         }
 
         let start = Instant::now();
 
+        let author = new_message
+            .author_nick(&ctx)
+            .await
+            .unwrap_or_else(|| new_message.author.name.clone());
+
+        increment_counter!("gpt_requests_total", "user_id" => new_message.author.id.to_string());
+
+        debug!(
+            "Received message from {}: `{}`",
+            author, &new_message.content
+        );
+
         let result = Self::reply_with_gpt_completion(&ctx, &new_message).await;
 
         if let Err(err) = result {
-            increment_counter!("errors_total");
+            increment_counter!("gpt_errors_total", "user_id" => new_message.author.id.to_string());
             error!("Failed to send reply: {}", err);
         } else {
-            increment_counter!("gpt_responses_total");
+            increment_counter!("gpt_responses_total", "user_id" => new_message.author.id.to_string());
         }
 
+        let delay =
+            serenity::Timestamp::now().fixed_offset() - new_message.timestamp.fixed_offset();
+        let delay = delay.to_std().unwrap(); // duration can never be negative unless users send message in the future
         let duration = start.elapsed();
         histogram!("gpt_response_seconds", duration.as_secs_f64());
+        histogram!("gpt_response_delay_seconds", delay.as_secs_f64());
 
         {
             self.cooldowns.write().await.start_cooldown(cd_ctx);
@@ -153,16 +189,6 @@ impl Handler {
         ctx: &serenity::Context,
         message: &serenity::Message,
     ) -> Result<serenity::Message, Error> {
-        increment_counter!("gpt_requests_total");
-
-        let author = message
-            .author_nick(ctx)
-            .await
-            .unwrap_or_else(|| message.author.name.clone());
-
-        debug!("Received message from {}: `{}`", author, &message.content);
-
-
         let chat_completion = {
             let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id.0);
 

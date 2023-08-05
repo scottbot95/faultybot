@@ -1,14 +1,14 @@
-pub mod policy_manager;
 pub mod policy;
+pub mod policy_manager;
 
-use std::collections::HashSet;
-use std::fmt::{Display, Formatter};
-use crate::{Error};
-use poise::serenity_prelude as serenity;
-use serenity::{ChannelId, GuildId, UserId};
-use crate::error::FaultyBotError;
+use crate::error::UserError;
 use crate::permissions::policy::{Effect, PolicyProvider};
 use crate::permissions::policy_manager::PolicyManager;
+use crate::Error;
+use poise::serenity_prelude as serenity;
+use serenity::{ChannelId, GuildId, UserId};
+use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
 
 pub enum Permission {
     Chat,
@@ -53,10 +53,18 @@ impl Display for Permission {
     }
 }
 
-pub async fn validate_access(ctx: &crate::Context<'_>, permission: Permission) -> Result<(), Error> {
+pub async fn validate_access(
+    ctx: &crate::Context<'_>,
+    permission: Permission,
+) -> Result<(), Error> {
     ctx.data()
         .permissions_manager
-        .enforce(ctx.author().id, ctx.channel_id(), ctx.guild_id(), permission)
+        .enforce(
+            ctx.author().id,
+            ctx.channel_id(),
+            ctx.guild_id(),
+            permission,
+        )
         .await
 }
 
@@ -67,7 +75,11 @@ pub struct PermissionsManager {
 }
 
 impl PermissionsManager {
-    pub fn new(db: crate::database::Database, ctx: serenity::Context, owners: HashSet<UserId>) -> Self {
+    pub fn new(
+        db: crate::database::Database,
+        ctx: serenity::Context,
+        owners: HashSet<UserId>,
+    ) -> Self {
         Self {
             policy_manager: PolicyManager::new(db),
             serenity_ctx: ctx,
@@ -84,9 +96,8 @@ impl PermissionsManager {
     ) -> Result<(), Error> {
         // Bot owners are super-user
         if self.owners.contains(&user_id) {
-            return Ok(())
+            return Ok(());
         }
-
 
         // FIXME Temp disable while testing
         /*
@@ -100,9 +111,7 @@ impl PermissionsManager {
          */
 
         let roles = if let Some(guild_id) = guild_id {
-            guild_id.member(&self.serenity_ctx, user_id)
-                .await?
-                .roles
+            guild_id.member(&self.serenity_ctx, user_id).await?.roles
         } else {
             vec![]
         };
@@ -114,14 +123,22 @@ impl PermissionsManager {
             user_id: Some(user_id),
         };
 
-        let policy = self.policy_manager
+        let policy = self
+            .policy_manager
             .effective_policy(&self.serenity_ctx, policy_ctx, permission.to_string())
             .await?;
 
         match policy.effect {
             Effect::Allow => Ok(()),
             // Treat anything other than explicit allow as deny
-            _ => Err(FaultyBotError::access_denied(format!("{} does not have permissions for {}", policy.principle, permission)).into())
+            _ => Err(UserError::access_denied(
+                user_id,
+                format!(
+                    "{} does not have permissions for {}",
+                    policy.principle, permission
+                ),
+            )
+            .into()),
         }
     }
 }

@@ -1,9 +1,8 @@
+use crate::error::UserError;
+use crate::permissions::policy::{Effect, Policy, PolicyContext, PolicyProvider, Principle};
+use crate::permissions::{validate_access, Permission};
 use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, RoleId, UserId};
-use crate::error::FaultyBotError;
-use crate::permissions::policy::{Effect, Policy, PolicyContext, PolicyProvider, Principle};
-use crate::permissions::{Permission, validate_access};
-
 
 /// Manage permissions for a given principle
 ///
@@ -27,14 +26,10 @@ pub async fn permissions(_ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 async fn set(
     ctx: Context<'_>,
-    #[description = "Channel permission will be scoped to"]
-    channel: Option<ChannelId>,
-    #[description = "User permission will be scoped to"]
-    user: Option<UserId>,
-    #[description = "Role permission will be scoped to"]
-    role: Option<RoleId>,
-    #[description = "Permission to manage permissions for"]
-    permission: PermissionChoice,
+    #[description = "Channel permission will be scoped to"] channel: Option<ChannelId>,
+    #[description = "User permission will be scoped to"] user: Option<UserId>,
+    #[description = "Role permission will be scoped to"] role: Option<RoleId>,
+    #[description = "Permission to manage permissions for"] permission: PermissionChoice,
     #[description = "Extra specifier to limit permission (ie the name of a setting to grant manage for)"]
     specifier: Option<String>,
     #[description = "Effect to apply or `Unset` to revert to default permissions"]
@@ -48,14 +43,16 @@ async fn set(
     let action = permission.into_permission(specifier).to_string();
     validate_access(&ctx, Permission::SetPermission(Some(action.clone()))).await?;
 
-    let policy_manager = ctx.data()
-        .permissions_manager
-        .as_ref();
+    let policy_manager = ctx.data().permissions_manager.as_ref();
 
     let principle = get_principle(&ctx, channel, user, role)?;
 
-    let effect = if let Some(effect) = effect.into_effect() { effect } else {
-        policy_manager.clear_policy(principle, action.clone()).await?;
+    let effect = if let Some(effect) = effect.into_effect() {
+        effect
+    } else {
+        policy_manager
+            .clear_policy(ctx.author().id, principle, action.clone())
+            .await?;
         let msg = format!("Cleared policy for {} to do `{}`", principle, action);
         ctx.send(|b| b.content(msg).ephemeral(true)).await?;
         return Ok(());
@@ -66,20 +63,23 @@ async fn set(
             let duration: std::time::Duration = duration.into();
             Some(std::time::SystemTime::now() + duration)
         }
-        (None, Some(until)) => {
-            Some(until.into())
-        }
+        (None, Some(until)) => Some(until.into()),
         (None, None) => None,
         (_, _) => {
-            let msg = "Cannot provide `for` and `until` simultaneously".to_string();
-            return Err(FaultyBotError::InvalidInput(msg).into());
+            let msg = "Cannot provide `for` and `until` simultaneously";
+            return Err(UserError::invalid_input(ctx.author().id, msg).into());
         }
     } // Map is done in two stages since you must specify the timezone when converting from SystemTime
-        .map(chrono::DateTime::<chrono::Utc>::from)
-        .map(chrono::DateTime::<chrono::FixedOffset>::from);
+    .map(chrono::DateTime::<chrono::Utc>::from)
+    .map(chrono::DateTime::<chrono::FixedOffset>::from);
 
-    let policy = Policy { effect, principle, action, until };
-    policy_manager.save_policy(&policy).await?;
+    let policy = Policy {
+        effect,
+        principle,
+        action,
+        until,
+    };
+    policy_manager.save_policy(ctx.author().id, &policy).await?;
 
     let msg = format!("Saved policy {:?}", policy);
     ctx.send(|b| b.content(msg).ephemeral(true)).await?;
@@ -92,14 +92,10 @@ async fn set(
 #[poise::command(slash_command)]
 async fn get(
     ctx: Context<'_>,
-    #[description = "Channel to fetch permissions for"]
-    channel: Option<ChannelId>,
-    #[description = "User to fetch permissions for"]
-    user: Option<UserId>,
-    #[description = "Role to fetch permissions for"]
-    role: Option<RoleId>,
-    #[description = "Permission to manage permissions for"]
-    permission: PermissionChoice,
+    #[description = "Channel to fetch permissions for"] channel: Option<ChannelId>,
+    #[description = "User to fetch permissions for"] user: Option<UserId>,
+    #[description = "Role to fetch permissions for"] role: Option<RoleId>,
+    #[description = "Permission to manage permissions for"] permission: PermissionChoice,
     #[description = "Extra specifier to limit permission (ie the name of a setting to grant manage for)"]
     specifier: Option<String>,
 ) -> Result<(), Error> {
@@ -112,7 +108,8 @@ async fn get(
         roles: role.map(|v| vec![v]).unwrap_or_default(),
     };
 
-    let policy = ctx.data()
+    let policy = ctx
+        .data()
         .permissions_manager
         .as_ref()
         .effective_policy(ctx, policy_ctx, action)
@@ -124,25 +121,34 @@ async fn get(
     Ok(())
 }
 
-fn get_principle(ctx: &Context, channel: Option<ChannelId>, user: Option<UserId>, role: Option<RoleId>) -> Result<Principle, FaultyBotError> {
+fn get_principle(
+    ctx: &Context,
+    channel: Option<ChannelId>,
+    user: Option<UserId>,
+    role: Option<RoleId>,
+) -> Result<Principle, UserError> {
     match (channel, user, role) {
         (Some(channel_id), None, None) => Ok(Principle::Channel(channel_id)),
-        (None, Some(user_id), None) => if let Some(guild_id) = ctx.guild_id() {
-            Ok(Principle::Member(guild_id, user_id))
-        } else {
-            let msg = "Please specify only one scope".to_string();
-            Err(FaultyBotError::InvalidInput(msg))
+        (None, Some(user_id), None) => {
+            if let Some(guild_id) = ctx.guild_id() {
+                Ok(Principle::Member(guild_id, user_id))
+            } else {
+                let msg = "Please specify only one scope";
+                Err(UserError::invalid_input(ctx.author().id, msg))
+            }
         }
         (None, None, Some(role_id)) => Ok(Principle::Role(role_id)),
         // Guild-wide if in a guild or for the "channel" if in a DM
-        (None, None, None) => if let Some(guild_id) = ctx.guild_id() {
-            Ok(Principle::Guild(guild_id))
-        } else {
-            Ok(Principle::Channel(ctx.channel_id()))
+        (None, None, None) => {
+            if let Some(guild_id) = ctx.guild_id() {
+                Ok(Principle::Guild(guild_id))
+            } else {
+                Ok(Principle::Channel(ctx.channel_id()))
+            }
         }
         _ => {
-            let msg = "Please specify only one scope".to_string();
-            Err(FaultyBotError::InvalidInput(msg))
+            let msg = "Please specify only one scope";
+            Err(UserError::invalid_input(ctx.author().id, msg))
         }
     }
 }

@@ -45,10 +45,21 @@ impl Chat {
             instance.add_message_chain(ctx, message).await;
         }
 
-
         debug!("Chat history: {:?}", instance.messages);
 
         Ok(instance)
+    }
+
+    pub async fn completion(&mut self) -> Result<ChatCompletionMessage, Error> {
+        let completion = ChatCompletion::builder(&self.model, self.messages.clone())
+            .create()
+            .await?;
+
+        let choice = completion.choices.first().unwrap().message.clone();
+
+        self.messages.push(choice.clone());
+
+        Ok(choice)
     }
 
     #[async_recursion]
@@ -89,34 +100,24 @@ impl Chat {
         self.messages.push(chat_message);
     }
 
-    async fn add_channel_messages(&mut self, ctx: &Context, message: &Message) -> Result<(), Error> {
-
+    async fn add_channel_messages(
+        &mut self,
+        ctx: &Context,
+        message: &Message,
+    ) -> Result<(), Error> {
         // TODO use .messages_iter with a Stream instead
-        let messages_fut = message.channel_id
+        let messages_fut = message
+            .channel_id
             .messages(ctx, |b| b.limit(25).before(message.id))
             .await?
             .into_iter()
             .rev()
-            .map(|m| async {
-                m.into_chat_message(ctx).await
-            });
+            .map(|m| async { m.into_chat_message(ctx).await });
 
         let mut messages = futures::future::join_all(messages_fut).await;
         self.messages.append(&mut messages);
 
         Ok(())
-    }
-
-    pub async fn completion(&mut self) -> Result<ChatCompletionMessage, Error> {
-        let completion = ChatCompletion::builder(&self.model, self.messages.clone())
-            .create()
-            .await?;
-
-        let choice = completion.choices.first().unwrap().message.clone();
-
-        self.messages.push(choice.clone());
-
-        Ok(choice)
     }
 }
 

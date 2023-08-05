@@ -20,13 +20,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info};
 
+use crate::permissions::PermissionsManager;
 use crate::settings::config::FaultybotConfig;
 use poise::serenity_prelude as serenity;
 use settings::manager::SettingsManager;
 use tracing_subscriber::EnvFilter;
-use crate::permissions::PermissionsManager;
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
+type Error = error::FaultyBotError;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 // Custom user data passed to all command functions
@@ -118,7 +118,7 @@ async fn main() {
                     permissions_manager: PermissionsManager::new(
                         db,
                         ctx.clone(),
-                        framework.options().owners.clone()
+                        framework.options().owners.clone(),
                     ),
                 })
             })
