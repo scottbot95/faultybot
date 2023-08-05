@@ -19,7 +19,7 @@ in
       type = types.path;
       description = mdDoc """
         Path to file to load environment variables from.
-        Must contain at least `DISCORD_TOKEN` and `OPENAI_KEY`.
+        Must contain at least `DISCORD__TOKEN` and `OPENAI__KEY`.
         Should be quoted so that path does not get copied to /nix/store
       """;
       example = "/run/secrets/faultybot.env";

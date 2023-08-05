@@ -26,6 +26,14 @@ pub(crate) struct Discord {
 }
 
 #[derive(Debug, Default, Deserialize)]
+pub(crate) struct GitHub {
+    pub(crate) token: String,
+    pub(crate) owner: String,
+    pub(crate) repo: String,
+    pub(crate) confirmation_channel: poise::serenity_prelude::ChannelId,
+}
+
+#[derive(Debug, Default, Deserialize)]
 pub(crate) struct OpenAI {
     pub(crate) key: String,
 }
@@ -46,6 +54,7 @@ pub struct FaultybotConfig {
     pub(crate) ansi: Ansi,
     pub(crate) database: Database,
     pub(crate) discord: Discord,
+    pub(crate) github: Option<GitHub>,
     pub(crate) openai: OpenAI,
     pub(crate) prometheus: Option<Prometheus>,
     pub(crate) statsd: Option<Statsd>,
@@ -78,6 +87,6 @@ pub fn build_config(
                 .unwrap_or_else(|| File::with_name("config/faultybot"))
                 .required(false),
         )
-        .add_source(Environment::default().separator("_"))
+        .add_source(Environment::default().separator("__"))
         .build()
 }

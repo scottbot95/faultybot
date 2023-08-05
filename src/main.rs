@@ -18,6 +18,7 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use octocrab::{Octocrab, OctocrabBuilder};
 use tracing::{error, info};
 
 use crate::permissions::PermissionsManager;
@@ -34,6 +35,8 @@ pub struct Data {
     handler: handler::Handler,
     settings_manager: SettingsManager,
     permissions_manager: PermissionsManager,
+    config: FaultybotConfig,
+    octocrab: Option<Octocrab>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -63,9 +66,16 @@ async fn main() {
         .with_ansi(settings.ansi.colors)
         .init();
 
+    tracing::debug!("{:?}", settings);
+
     init_metrics(&settings);
 
     openai::set_key(settings.openai.key.clone());
+    
+    let octocrab =  settings.github.as_ref().map(|gh| Octocrab::builder()
+        .personal_token(gh.token.clone())
+        .build()
+        .unwrap());
 
     info!("Connecting to database...");
     let db = database::Database::connect(&settings.database)
@@ -78,7 +88,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: commands::commands_vec(),
+            commands: commands::commands_vec(&settings),
             event_handler: |ctx, event, framework, data: &Data| {
                 Box::pin(async move {
                     data.handler
@@ -101,7 +111,7 @@ async fn main() {
             },
             ..Default::default()
         })
-        .token(settings.discord.token)
+        .token(&settings.discord.token)
         .intents(
             serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
         )
@@ -109,6 +119,7 @@ async fn main() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
+                    config: settings,
                     handler: handler::Handler::new(poise::CooldownConfig {
                         user: Some(Duration::from_secs(10)),
                         guild: Some(Duration::from_secs(5)),
@@ -120,6 +131,7 @@ async fn main() {
                         ctx.clone(),
                         framework.options().owners.clone(),
                     ),
+                    octocrab,
                 })
             })
         })

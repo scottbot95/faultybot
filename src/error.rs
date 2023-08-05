@@ -49,4 +49,5 @@ pub enum FaultyBotError {
     OpenAI(#[from] openai::OpenAiError),
     Json(#[from] serde_json::Error),
     Config(#[from] config::ConfigError),
+    Octocrab(#[from] octocrab::Error),
 }
