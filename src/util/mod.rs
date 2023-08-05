@@ -46,8 +46,8 @@ pub struct AuditInfo {
 }
 
 impl AuditInfo {
-    pub fn as_metric_labels<'a>(&self) -> [(&'a str, String); 2] {
-        [
+    pub fn as_metric_labels<'a>(&self) -> Vec<(&'a str, String)> {
+        vec![
             ("user_id", self.user_id.to_string()),
             ("guild_id", self.guild_id.to_string()),
         ]

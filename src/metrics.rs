@@ -1,5 +1,5 @@
 use crate::settings::config::FaultybotConfig;
-use metrics::{describe_counter, describe_histogram, histogram, NoopRecorder};
+use metrics::{describe_counter, describe_histogram, histogram, increment_counter, NoopRecorder};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_statsd::StatsdBuilder;
 use metrics_util::MetricKindMask;
@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 use tracing::{info, warn};
+use crate::util::AuditInfo;
 
 pub(crate) fn init_metrics(settings: &FaultybotConfig) {
     if install_prometheus_recorder(settings).expect("Failed to install Prometheus recorder") {
@@ -37,6 +38,19 @@ pub(crate) fn periodic_metrics(cache: Arc<serenity::Cache>, period: Duration) {
             histogram!("guilds_in_cache", guild_count as f64);
         }
     });
+}
+
+pub async fn record_command_metrics(ctx: crate::Context<'_>) -> Result<bool, crate::Error> {
+    let mut labels = AuditInfo::from(&ctx)
+        .as_metric_labels();
+
+    labels.extend([
+        ("command_name", ctx.invoked_command_name().to_string())
+    ]);
+
+    increment_counter!("commands_total", &labels);
+
+    Ok(true)
 }
 
 /// We register these metrics, which gives us a chance to specify a description for them.  The

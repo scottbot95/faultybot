@@ -23,7 +23,10 @@ pub async fn permissions(_ctx: Context<'_>) -> Result<(), Error> {
 
 /// Set permissions for a given principle
 #[allow(clippy::too_many_arguments)]
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    check = "crate::metrics::record_command_metrics"
+)]
 async fn set(
     ctx: Context<'_>,
     #[description = "Channel permission will be scoped to"] channel: Option<ChannelId>,
@@ -89,7 +92,10 @@ async fn set(
 
 /// Get permissions for a given principle
 #[allow(clippy::too_many_arguments)]
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    check = "crate::metrics::record_command_metrics"
+)]
 async fn get(
     ctx: Context<'_>,
     #[description = "Channel to fetch permissions for"] channel: Option<ChannelId>,
