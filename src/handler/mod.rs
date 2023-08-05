@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{debug, error, info};
 
-use crate::error::{CooldownError, FaultyBotError};
+use crate::error::FaultyBotError;
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
@@ -37,6 +37,8 @@ pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(
     Ok(())
 }
 
+// async fn handle_error(ctx: poi)
+
 pub(crate) struct Handler {
     cooldowns: RwLock<poise::Cooldowns>,
 }
@@ -64,20 +66,16 @@ impl Handler {
             }
             poise::Event::Message { new_message } => {
                 let result = self
-                    .handle_message(ctx.clone(), framework.clone(), new_message.clone())
+                    .handle_message(ctx.clone(), framework, new_message.clone())
                     .await;
-                match result {
-                    Ok(()) => {}
-                    Err(err) => match err.downcast::<CooldownError>() {
+                if let Err(err) = result {
+                    match err.downcast::<FaultyBotError>() {
                         Ok(cd_err) => {
-                            let msg = format!(
-                                "You're too fast. Please wait {:.1} seconds before retrying",
-                                cd_err.remaining().as_secs_f32()
-                            );
+                            let msg = cd_err.to_string();
                             new_message.reply(ctx, msg).await?;
                         }
                         Err(err) => return Err(err),
-                    },
+                    }
                 }
             }
             _ => {}
@@ -126,7 +124,7 @@ impl Handler {
                 .await
                 .remaining_cooldown(cd_ctx.clone());
             if let Some(time_remaining) = time_remaining {
-                return Err(CooldownError::new(time_remaining).into());
+                return Err(FaultyBotError::cooldown_hit(time_remaining).into());
             }
         }
 
@@ -163,6 +161,7 @@ impl Handler {
             .unwrap_or_else(|| message.author.name.clone());
 
         debug!("Received message from {}: `{}`", author, &message.content);
+
 
         let chat_completion = {
             let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id.0);

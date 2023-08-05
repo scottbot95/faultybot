@@ -121,9 +121,7 @@ impl PermissionsManager {
         match policy.effect {
             Effect::Allow => Ok(()),
             // Treat anything other than explicit allow as deny
-            _ => Err(FaultyBotError::AccessDenied {
-                reason: format!("{} does not have permissions for {}", policy.principle, permission)
-            }.into())
+            _ => Err(FaultyBotError::access_denied(format!("{} does not have permissions for {}", policy.principle, permission)).into())
         }
     }
 }
