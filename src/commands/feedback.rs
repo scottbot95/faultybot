@@ -1,23 +1,28 @@
-use poise::serenity_prelude::Mentionable;
-use crate::{Data, Error};
+use poise::serenity_prelude as serenity;
+use serenity::Mentionable;
+use crate::{Context, Error};
+use crate::permissions::{Permission, validate_access};
 
 #[derive(poise::Modal)]
-struct SuggestionModal {
+#[name = "Feedback"]
+struct FeedbackModal {
     title: String,
-    #[paragraph]
     description: String,
 }
 
-/// Submit a suggestion FaultyBot
+/// Submit a feedback to FaultyBot
 #[poise::command(
     slash_command,
     check = "crate::metrics::record_command_metrics"
 )]
-pub async fn suggestion(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn feedback(
+    ctx: Context<'_>,
+    #[rename = "type"] label: FeedbackTypeChoice
+) -> Result<(), Error> {
     use poise::Modal as _;
     use std::fmt::Write as _;
 
-    validate_access(&ctx, Permission::CreateSuggestion).await?;
+    validate_access(&ctx, Permission::SendFeedback(Some(label.label()))).await?;
 
     let ctx = match ctx {
         Context::Application(ctx) => ctx,
@@ -29,10 +34,10 @@ pub async fn suggestion(ctx: Context<'_>) -> Result<(), Error> {
 
     let confirmation_channel = gh_config.confirmation_channel;
 
-    let data = SuggestionModal::execute(ctx).await?;
+    let data = FeedbackModal::execute(ctx).await?;
 
     if let Some(data) = data {
-        let issue_title = format!("[Suggestion] {}", data.title);
+        let issue_title = format!("[{}] {}", label, data.title);
         let mut issue_description = format!(
             "{}\n\n---\n\nRequested by: {} ({})",
             data.description, ctx.author().id.mention(), ctx.author().name
@@ -76,7 +81,7 @@ pub async fn suggestion(ctx: Context<'_>) -> Result<(), Error> {
                 let issue = octocrab.issues(&gh_config.owner, &gh_config.repo)
                     .create(&issue_title)
                     .body(&issue_description)
-                    .labels(vec!["enhancement".to_string()])
+                    .labels(vec![label.label()])
                     .send()
                     .await?;
 
@@ -103,4 +108,19 @@ pub async fn suggestion(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Copy, Clone, poise::ChoiceParameter, derive_more::Display)]
+pub enum FeedbackTypeChoice {
+    Bug,
+    Suggestion,
+}
+
+impl FeedbackTypeChoice {
+    fn label(self) -> String {
+        match self {
+            FeedbackTypeChoice::Bug => "bug",
+            FeedbackTypeChoice::Suggestion => "enhancement",
+        }.to_string()
+    }
 }

@@ -16,6 +16,7 @@ pub enum Permission {
     GetPermission(Option<String>),
     SetSetting(Option<String>),
     GetSetting(Option<String>),
+    SendFeedback(Option<String>),
 }
 
 impl Permission {
@@ -26,16 +27,18 @@ impl Permission {
             Permission::GetPermission(_) => "permissions.get",
             Permission::SetSetting(_) => "settings.set",
             Permission::GetSetting(_) => "settings.get",
+            Permission::SendFeedback(_) => "feedback.send",
         }
     }
 
     pub fn specifier(&self) -> Option<&str> {
         let specifier = match self {
-            Permission::Chat => &None,
             Permission::SetPermission(specifier) => specifier,
             Permission::GetPermission(specifier) => specifier,
             Permission::SetSetting(specifier) => specifier,
             Permission::GetSetting(specifier) => specifier,
+            Permission::SendFeedback(specifier) => specifier,
+            _ => &None,
         };
 
         specifier.as_ref().map(|s| s.as_str())

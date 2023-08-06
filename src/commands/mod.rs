@@ -1,6 +1,6 @@
 mod permissions;
 mod settings;
-mod suggestion;
+mod feedback;
 
 use crate::{Context, Data, Error};
 use crate::settings::config::FaultybotConfig;
@@ -9,7 +9,7 @@ pub fn commands_vec(config: &FaultybotConfig) -> Vec<poise::Command<Data, Error>
     let mut commands = vec![help(), permissions::permissions(), settings::settings()];
 
     if config.github.is_some() {
-        commands.push(suggestion::suggestion());
+        commands.push(feedback::feedback());
     }
 
     commands
