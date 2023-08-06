@@ -44,7 +44,7 @@ pub struct Data {
 }
 
 #[derive(Debug, clap::Parser)]
-#[command(author, version, about, long_about=None)]
+#[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(short, long = "configFile")]
     cfg_file: Option<PathBuf>,
@@ -75,8 +75,8 @@ async fn main() {
     init_metrics(&settings);
 
     openai::set_key(settings.openai.key.clone());
-    
-    let octocrab =  settings.github.as_ref().map(|gh| Octocrab::builder()
+
+    let octocrab = settings.github.as_ref().map(|gh| Octocrab::builder()
         .personal_token(gh.token.clone())
         .build()
         .unwrap());
@@ -102,6 +102,9 @@ async fn main() {
                     Ok(())
                 })
             },
+            pre_command: |ctx| Box::pin(async move {
+                crate::metrics::record_command_metrics(ctx).await
+            }),
             on_error: |error| {
                 Box::pin(async move {
                     if let Err(e) = handler::on_error(error).await {
@@ -136,7 +139,7 @@ async fn main() {
                         framework.options().owners.clone(),
                     ),
                     octocrab,
-                    persona_manager: PersonaManager::new(db.clone())
+                    persona_manager: PersonaManager::new(db.clone()),
                 })
             })
         })

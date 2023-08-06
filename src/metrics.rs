@@ -40,7 +40,7 @@ pub(crate) fn periodic_metrics(cache: Arc<serenity::Cache>, period: Duration) {
     });
 }
 
-pub async fn record_command_metrics(ctx: crate::Context<'_>) -> Result<bool, crate::Error> {
+pub async fn record_command_metrics(ctx: crate::Context<'_>) {
     let mut labels = AuditInfo::from(&ctx)
         .as_metric_labels();
 
@@ -49,8 +49,6 @@ pub async fn record_command_metrics(ctx: crate::Context<'_>) -> Result<bool, cra
     ]);
 
     increment_counter!("commands_total", &labels);
-
-    Ok(true)
 }
 
 /// We register these metrics, which gives us a chance to specify a description for them.  The

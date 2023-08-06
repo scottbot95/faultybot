@@ -19,10 +19,7 @@ pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
 ///
 /// Bot-wide per-user settings are currently not supported.
 /// To change settings in your DMs, use per-channel settings
-#[poise::command(
-    slash_command,
-    check = "crate::metrics::record_command_metrics"
-)]
+#[poise::command(slash_command)]
 async fn set(
     ctx: Context<'_>,
     #[description = "Channel setting will be scoped to"] channel: Option<ChannelId>,
@@ -86,10 +83,7 @@ async fn set(
 ///
 /// Bot-wide per-user settings are currently not supported.
 /// To change settings in your DMs, use per-channel settings
-#[poise::command(
-    slash_command,
-    check = "crate::metrics::record_command_metrics"
-)]
+#[poise::command(slash_command)]
 async fn unset(
     ctx: Context<'_>,
     #[description = "Channel setting will be scoped to"] channel: Option<ChannelId>,
@@ -148,10 +142,7 @@ async fn unset(
 ///
 /// Bot-wide per-user settings are currently not supported.
 /// To change settings in your DMs, use per-channel settings
-#[poise::command(
-    slash_command,
-    check = "crate::metrics::record_command_metrics"
-)]
+#[poise::command(slash_command)]
 async fn get(
     ctx: Context<'_>,
     channel: Option<ChannelId>,

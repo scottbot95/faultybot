@@ -13,7 +13,6 @@ struct FeedbackModal {
 /// Submit a feedback to FaultyBot
 #[poise::command(
     slash_command,
-    check = "crate::metrics::record_command_metrics",
     user_cooldown = 15,
 )]
 pub async fn feedback(
