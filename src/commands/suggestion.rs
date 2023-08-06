@@ -13,9 +13,16 @@ struct SuggestionModal {
     slash_command,
     check = "crate::metrics::record_command_metrics"
 )]
-pub async fn suggestion(ctx: poise::ApplicationContext<'_, Data, Error>) -> Result<(), Error> {
+pub async fn suggestion(ctx: Context<'_>) -> Result<(), Error> {
     use poise::Modal as _;
     use std::fmt::Write as _;
+
+    validate_access(&ctx, Permission::CreateSuggestion).await?;
+
+    let ctx = match ctx {
+        Context::Application(ctx) => ctx,
+        _ => unreachable!()
+    };
 
     let gh_config = ctx.data.config.github.as_ref().unwrap();
     let octocrab = ctx.data.octocrab.as_ref().unwrap();
