@@ -18,7 +18,7 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use octocrab::{Octocrab, OctocrabBuilder};
+use octocrab::Octocrab;
 use tracing::{error, info};
 
 use crate::permissions::PermissionsManager;
@@ -26,6 +26,9 @@ use crate::settings::config::FaultybotConfig;
 use poise::serenity_prelude as serenity;
 use settings::manager::SettingsManager;
 use tracing_subscriber::EnvFilter;
+
+use database::Database;
+use crate::gpt::PersonaManager;
 
 type Error = error::FaultyBotError;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -37,6 +40,7 @@ pub struct Data {
     permissions_manager: PermissionsManager,
     config: FaultybotConfig,
     octocrab: Option<Octocrab>,
+    persona_manager: PersonaManager,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -127,11 +131,12 @@ async fn main() {
                     }),
                     settings_manager: SettingsManager::new(config, db.clone()),
                     permissions_manager: PermissionsManager::new(
-                        db,
+                        db.clone(),
                         ctx.clone(),
                         framework.options().owners.clone(),
                     ),
                     octocrab,
+                    persona_manager: PersonaManager::new(db.clone())
                 })
             })
         })

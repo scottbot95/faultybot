@@ -1,10 +1,9 @@
-use async_recursion::async_recursion;
 use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
+use poise::serenity_prelude::{Context, GuildId, Message, User};
 use tracing::debug;
-
+use async_recursion::async_recursion;
 use crate::Error;
-use poise::serenity_prelude as serenity;
-use poise::serenity_prelude::{Context, GuildId, Message};
+use crate::gpt::persona::Persona;
 
 pub struct Chat {
     model: String,
@@ -12,18 +11,12 @@ pub struct Chat {
 }
 
 impl Chat {
-    pub async fn from(ctx: &Context, model: &str, message: &Message) -> Result<Self, crate::Error> {
+    pub async fn from(ctx: &Context, persona: Persona, message: &Message) -> Result<Self, crate::Error> {
         let bot_name = bot_name(ctx, message.guild_id).await;
-        let system_prompt = format!(
-            r#"You are {}, a helpful assistant build into a Discord bot.
-            You are helpful, but your responses are always sassy and sometimes rude."#,
-            bot_name
-        )
-        .trim()
-        .to_string();
+        let system_prompt = persona.prompt(bot_name.as_str());
 
         let mut instance = Self {
-            model: model.to_string(),
+            model: persona.model(),
             messages: vec![ChatCompletionMessage {
                 role: ChatCompletionMessageRole::System,
                 content: Some(system_prompt),
@@ -122,7 +115,7 @@ impl Chat {
 }
 
 async fn bot_name(ctx: &Context, guild_id: Option<GuildId>) -> String {
-    let user: serenity::User = ctx.cache.current_user().into();
+    let user: User = ctx.cache.current_user().into();
 
     match guild_id {
         Some(guild_id) => user.nick_in(ctx, guild_id).await.unwrap_or(user.name),

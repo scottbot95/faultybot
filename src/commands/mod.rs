@@ -1,4 +1,5 @@
 mod permissions;
+mod persona;
 mod settings;
 mod feedback;
 

@@ -165,7 +165,11 @@ impl Handler {
             author, &new_message.content
         );
 
-        let result = Self::reply_with_gpt_completion(&ctx, &new_message).await;
+        let persona = framework.user_data.persona_manager
+            .load(new_message.channel_id, new_message.guild_id)
+            .await?;
+
+        let result = Self::reply_with_gpt_completion(&ctx, persona, &new_message).await;
 
         if let Err(err) = result {
             increment_counter!("gpt_errors_total", &metric_labels);
@@ -190,12 +194,13 @@ impl Handler {
 
     async fn reply_with_gpt_completion(
         ctx: &serenity::Context,
+        persona: crate::gpt::Persona,
         message: &serenity::Message,
     ) -> Result<serenity::Message, Error> {
         let chat_completion = {
             let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id.0);
 
-            let mut chat = Chat::from(ctx, "gpt-3.5-turbo", message).await?;
+            let mut chat = Chat::from(ctx, persona, message).await?;
 
             chat.completion().await?
         };
