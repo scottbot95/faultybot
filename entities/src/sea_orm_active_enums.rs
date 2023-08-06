@@ -10,3 +10,9 @@ pub enum Effect {
     #[sea_orm(string_value = "Deny")]
     Deny,
 }
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "llm_model")]
+pub enum LlmModel {
+    #[sea_orm(string_value = "gpt-3.5-turbo")]
+    Gpt35Turbo,
+}
