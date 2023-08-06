@@ -103,7 +103,10 @@ async fn main() {
                 })
             },
             pre_command: |ctx| Box::pin(async move {
-                crate::metrics::record_command_metrics(ctx).await
+                crate::metrics::record_command_start(ctx).await
+            }),
+            post_command: |ctx| Box::pin(async move {
+                crate::metrics::record_command_completion(ctx).await
             }),
             on_error: |error| {
                 Box::pin(async move {
