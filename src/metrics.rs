@@ -54,7 +54,7 @@ pub async fn record_command_start(ctx: crate::Context<'_>) {
         .as_metric_labels();
 
     labels.extend([
-        ("command_name", ctx.invoked_command_name().to_string())
+        ("command_name", ctx.command().qualified_name.clone())
     ]);
 
     increment_counter!("command_executions_total", &labels);
