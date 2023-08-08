@@ -28,11 +28,14 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Persona::Name).string().not_null())
-                    .col(ColumnDef::new(Persona::GuildId).big_unsigned().not_null())
+                    .col(ColumnDef::new(Persona::GuildId).big_unsigned().null())
+                    .col(ColumnDef::new(Persona::Description).string().null())
                     .col(ColumnDef::new(Persona::Prompt).string().not_null())
+                    .col(ColumnDef::new(Persona::Builtin).boolean().not_null())
                     .col(
                         ColumnDef::new(Persona::Model)
                             .enumeration(LLMModel::Table, LLMModel::iter().skip(1))
+                            .default(LLMModel::Gpt35Turbo.to_string())
                             .not_null()
                     )
                     .index(Index::create()
@@ -56,8 +59,8 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(ActivePersona::GuildId).big_unsigned())
-                    .col(ColumnDef::new(ActivePersona::ChannelId).big_unsigned())
+                    .col(ColumnDef::new(ActivePersona::GuildId).big_unsigned().null())
+                    .col(ColumnDef::new(ActivePersona::ChannelId).big_unsigned().null())
                     .col(ColumnDef::new(ActivePersona::PersonaId).integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
@@ -71,6 +74,14 @@ impl MigrationTrait for Migration {
                         .col(ActivePersona::ChannelId)
                         .nulls_not_distinct())
                     .to_owned(),
+            )
+            .await?;
+
+        // No good way to add arbitrary named check constraints :(
+        manager.get_connection()
+            .execute_unprepared(
+                r#"ALTER TABLE persona
+                       ADD CONSTRAINT CHK_GuildOrBuiltin CHECK ((builtin and guild_id IS NULL) or (guild_id IS NOT NULL));"#
             )
             .await?;
 
@@ -95,17 +106,19 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(DeriveIden)]
-enum Persona {
+pub(crate) enum Persona {
     Table,
     Id,
     Name,
     GuildId,
     Model,
+    Description,
     Prompt,
+    Builtin
 }
 
 #[derive(DeriveIden)]
-enum ActivePersona {
+pub(crate) enum ActivePersona {
     Table,
     Id,
     GuildId,
@@ -114,7 +127,7 @@ enum ActivePersona {
 }
 
 #[derive(DeriveIden, EnumIter)]
-enum LLMModel {
+pub(crate) enum LLMModel {
     Table,
     #[sea_orm(iden = "gpt-3.5-turbo")]
     Gpt35Turbo,

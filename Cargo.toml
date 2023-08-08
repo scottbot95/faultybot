@@ -83,3 +83,7 @@ features = [ "json", "rustls", "rustls-tls", "hyper-rustls", "tokio-rustls" ]
 
 [dev-dependencies]
 ctor = "0.2.3"
+
+# Optimize dependencies even in debug build
+[profile.dev.package."*"]
+opt-level = 2

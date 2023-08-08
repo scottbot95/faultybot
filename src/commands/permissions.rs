@@ -5,17 +5,6 @@ use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, RoleId, UserId};
 
 /// Manage permissions for a given principle
-///
-/// Permissions are prefixed matched so groups of permissions can be assigned at once.
-/// (eg, `permissions` allows both `permissions.get` and `permissions.set`)
-///
-/// Available permissions:
-/// - `chat`: Ability to chat with FaultyBot via @mentions
-/// - `permissions.get`: Ability to use `/permissions get`
-/// - `permissions.set:<permission>`: Ability to manage a permission via `/permissions set` for a specific permission
-/// - `settings.get`: Ability to use `/settings get`
-/// - `settings.set:<setting>`: Ability to use `/settings set` for a specific setting
-/// - `settings.unset:<setting>`: Ability to use `/settings unset` for a specific setting
 #[poise::command(slash_command, subcommands("get", "set"))]
 pub async fn permissions(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -51,7 +40,7 @@ async fn set(
         effect
     } else {
         policy_manager
-            .clear_policy(ctx.author().id, principle, action.clone())
+            .clear_policy(principle, action.clone())
             .await?;
         let msg = format!("Cleared policy for {} to do `{}`", principle, action);
         ctx.send(|b| b.content(msg).ephemeral(true)).await?;
@@ -67,7 +56,7 @@ async fn set(
         (None, None) => None,
         (_, _) => {
             let msg = "Cannot provide `for` and `until` simultaneously";
-            return Err(UserError::invalid_input(ctx.author().id, msg).into());
+            return Err(UserError::invalid_input(msg).into());
         }
     } // Map is done in two stages since you must specify the timezone when converting from SystemTime
     .map(chrono::DateTime::<chrono::Utc>::from)
@@ -79,7 +68,7 @@ async fn set(
         action,
         until,
     };
-    policy_manager.save_policy(ctx.author().id, &policy).await?;
+    policy_manager.save_policy(&policy).await?;
 
     let msg = format!("Saved policy {:?}", policy);
     ctx.send(|b| b.content(msg).ephemeral(true)).await?;
@@ -134,7 +123,7 @@ fn get_principle(
                 Ok(Principle::Member(guild_id, user_id))
             } else {
                 let msg = "Please specify only one scope";
-                Err(UserError::invalid_input(ctx.author().id, msg))
+                Err(UserError::invalid_input(msg))
             }
         }
         (None, None, Some(role_id)) => Ok(Principle::Role(role_id)),
@@ -148,7 +137,7 @@ fn get_principle(
         }
         _ => {
             let msg = "Please specify only one scope";
-            Err(UserError::invalid_input(ctx.author().id, msg))
+            Err(UserError::invalid_input(msg))
         }
     }
 }
@@ -179,16 +168,28 @@ pub enum PermissionChoice {
     GetPermissions,
     ManageSettings,
     GetSettings,
+    SendFeedback,
+    CreatePersona,
+    ListPersona,
+    EditPersona,
+    UsePersona,
+    DeletePersona,
 }
 
 impl PermissionChoice {
     pub fn into_permission(self, specifier: Option<String>) -> Permission {
         match self {
-            PermissionChoice::Chat => Permission::Chat,
+            PermissionChoice::Chat => Permission::Chat(specifier),
             PermissionChoice::ManagePermissions => Permission::SetPermission(specifier),
             PermissionChoice::GetPermissions => Permission::GetPermission(specifier),
             PermissionChoice::ManageSettings => Permission::SetSetting(specifier),
             PermissionChoice::GetSettings => Permission::GetSetting(specifier),
+            PermissionChoice::SendFeedback => Permission::SendFeedback(specifier),
+            PermissionChoice::CreatePersona => Permission::CreatePersona,
+            PermissionChoice::ListPersona => Permission::ListPersona,
+            PermissionChoice::EditPersona => Permission::EditPersona(specifier),
+            PermissionChoice::UsePersona => Permission::UsePersona(specifier),
+            PermissionChoice::DeletePersona => Permission::DeletePersona(specifier),
         }
     }
 }

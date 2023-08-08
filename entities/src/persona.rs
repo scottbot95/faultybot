@@ -9,8 +9,10 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub name: String,
-    pub guild_id: i64,
+    pub guild_id: Option<i64>,
+    pub description: Option<String>,
     pub prompt: String,
+    pub builtin: bool,
     pub model: LlmModel,
 }
 

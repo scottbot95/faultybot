@@ -19,11 +19,11 @@ impl PolicyManager {
         Self { db }
     }
 
-    pub async fn save_policy(&self, requester: UserId, policy: &Policy) -> Result<(), Error> {
+    pub async fn save_policy(&self, policy: &Policy) -> Result<(), Error> {
         match policy.principle {
             Principle::Global => {
                 let msg = "Changing global bot permissions not currently supported";
-                return Err(UserError::invalid_input(requester, msg).into());
+                return Err(UserError::invalid_input(msg).into());
             }
             Principle::Guild(guild_id) => self.save_guild_policy(policy.clone(), guild_id).await?,
             Principle::Channel(channel_id) => {
@@ -41,7 +41,6 @@ impl PolicyManager {
 
     pub async fn clear_policy(
         &self,
-        requester: UserId,
         principle: Principle,
         action: String,
     ) -> Result<(), Error> {
@@ -77,7 +76,7 @@ impl PolicyManager {
             }
             Principle::Global => {
                 return Err(
-                    UserError::access_denied(requester, "Cannot modify global policies").into(),
+                    UserError::access_denied("Cannot modify global policies").into(),
                 )
             }
         };

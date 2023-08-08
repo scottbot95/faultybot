@@ -11,33 +11,47 @@ use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 
 pub enum Permission {
-    Chat,
+    Chat(Option<String>),
     SetPermission(Option<String>),
     GetPermission(Option<String>),
     SetSetting(Option<String>),
     GetSetting(Option<String>),
     SendFeedback(Option<String>),
+    CreatePersona,
+    ListPersona,
+    EditPersona(Option<String>),
+    UsePersona(Option<String>),
+    DeletePersona(Option<String>),
 }
 
 impl Permission {
     pub fn action(&self) -> &str {
         match self {
-            Permission::Chat => "chat",
+            Permission::Chat(_) => "chat",
             Permission::SetPermission(_) => "permissions.set",
             Permission::GetPermission(_) => "permissions.get",
             Permission::SetSetting(_) => "settings.set",
             Permission::GetSetting(_) => "settings.get",
             Permission::SendFeedback(_) => "feedback.send",
+            Permission::CreatePersona => "persona.create",
+            Permission::ListPersona => "persona.list",
+            Permission::EditPersona(_) => "persona.edit",
+            Permission::UsePersona(_) => "persona.use",
+            Permission::DeletePersona(_) => "persona.delete",
         }
     }
 
     pub fn specifier(&self) -> Option<&str> {
         let specifier = match self {
+            Permission::Chat(specifier) => specifier,
             Permission::SetPermission(specifier) => specifier,
             Permission::GetPermission(specifier) => specifier,
             Permission::SetSetting(specifier) => specifier,
             Permission::GetSetting(specifier) => specifier,
             Permission::SendFeedback(specifier) => specifier,
+            Permission::EditPersona(specifier) => specifier,
+            Permission::UsePersona(specifier) => specifier,
+            Permission::DeletePersona(specifier) => specifier,
             _ => &None,
         };
 
@@ -69,6 +83,14 @@ pub async fn validate_access(
             permission,
         )
         .await
+}
+
+pub fn validate_owner(ctx: &crate::Context<'_>) -> Result<(), Error> {
+    if ctx.framework().options.owners.contains(&ctx.author().id) {
+        return Ok(());
+    }
+
+    Err(UserError::access_denied("Only the bot owner can do that").into())
 }
 
 pub struct PermissionsManager {
@@ -134,13 +156,10 @@ impl PermissionsManager {
         match policy.effect {
             Effect::Allow => Ok(()),
             // Treat anything other than explicit allow as deny
-            _ => Err(UserError::access_denied(
-                user_id,
-                format!(
-                    "{} does not have permissions for {}",
-                    policy.principle, permission
-                ),
-            )
+            _ => Err(UserError::access_denied(format!(
+                "{} does not have permissions for {}",
+                policy.principle, permission
+            ))
             .into()),
         }
     }

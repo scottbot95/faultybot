@@ -34,7 +34,7 @@ async fn set(
     let updated_scope = match (channel, user) {
         (Some(_), Some(_)) => {
             let msg = "Per-user-per-channel settings not supported. Please specify only one scope";
-            return Err(UserError::invalid_input(ctx.author().id, msg).into());
+            return Err(UserError::invalid_input(msg).into());
         }
         (Some(channel_id), None) => {
             settings_manager
@@ -45,7 +45,7 @@ async fn set(
         (None, Some(user_id)) => {
             let guild_id = ctx.guild_id().ok_or_else(|| {
                 let msg = "Per-user settings not support outside a server. Please user per-channel settings for DMs";
-                UserError::invalid_input(ctx.author().id, msg)
+                UserError::invalid_input(msg)
             })?;
             settings_manager
                 .set_member(guild_id, user_id, key.clone(), Some(value.clone()))
@@ -96,7 +96,7 @@ async fn unset(
     let updated_scope = match (channel, user) {
         (Some(_), Some(_)) => {
             let msg = "Per-user-per-channel settings not supported. Please specify only one scope";
-            return Err(UserError::invalid_input(ctx.author().id, msg).into());
+            return Err(UserError::invalid_input(msg).into());
         }
         (Some(channel_id), None) => {
             settings_manager
@@ -107,7 +107,7 @@ async fn unset(
         (None, Some(user_id)) => {
             let guild_id = ctx.guild_id().ok_or_else(|| {
                 let msg = "Per-user settings not support outside a server. Please user per-channel settings for DMs";
-                UserError::invalid_input(ctx.author().id, msg)
+                UserError::invalid_input(msg)
             })?;
             settings_manager
                 .set_member::<serde_json::Value>(guild_id, user_id, key.clone(), None)
@@ -161,7 +161,7 @@ async fn get(
         (None, Some(user_id), false) => {
             let guild_id = ctx.guild_id().ok_or_else(|| {
                 let msg = "Per-user settings not support outside a server. Please user per-channel settings for DMs";
-                UserError::invalid_input(ctx.author().id, msg)
+                UserError::invalid_input(msg)
             })?;
             let value = settings_manager.get_member(guild_id, user_id, key).await?;
             SettingsValue::new(value, SettingsScopeKind::Member(guild_id, user_id))
@@ -169,7 +169,7 @@ async fn get(
         (None, None, true) => {
             let guild_id = ctx.guild_id().ok_or_else(|| {
                 let msg = "Cannot set guild-wide settings outside a guild";
-                UserError::invalid_input(ctx.author().id, msg)
+                UserError::invalid_input(msg)
             })?;
             let value = settings_manager.get_guild(guild_id, key).await?;
             SettingsValue::new(value, SettingsScopeKind::Guild(guild_id))
@@ -184,7 +184,7 @@ async fn get(
         }
         (_, _, _) => {
             let msg = "Please specify only one scope (channel, user, or guild)";
-            return Err(UserError::invalid_input(ctx.author().id, msg).into());
+            return Err(UserError::invalid_input(msg).into());
         }
     };
 

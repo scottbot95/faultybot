@@ -38,7 +38,10 @@ impl Chat {
             instance.add_message_chain(ctx, message).await;
         }
 
-        debug!("Chat history: {:?}", instance.messages);
+        debug!(
+            "Starting chat as {}. With history: {:?}",
+            persona.name(), instance.messages
+        );
 
         Ok(instance)
     }

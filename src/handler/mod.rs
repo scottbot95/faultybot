@@ -111,10 +111,25 @@ impl Handler {
             return Ok(());
         }
 
+        tracing::trace!("Received message: {:?}", new_message);
+
         // Only reply to DMs and direct mentions
         if new_message.guild_id.is_some() && !new_message.mentions_user_id(framework.bot_id) {
             return Ok(());
         }
+
+        let channel_id = new_message
+            .channel(&ctx)
+            .await?
+            .guild()
+            .and_then(|c| c.thread_metadata.map(|_| c.parent_id))
+            .flatten()
+            .unwrap_or(new_message.channel_id);
+
+        let persona = framework.user_data
+            .persona_manager
+            .get_active_persona(channel_id, new_message.guild_id)
+            .await?;
 
         // validate access
         framework
@@ -122,16 +137,16 @@ impl Handler {
             .permissions_manager
             .enforce(
                 new_message.author.id,
-                new_message.channel_id,
+                channel_id,
                 new_message.guild_id,
-                Permission::Chat,
+                Permission::Chat(Some(persona.name())),
             )
             .await?;
 
         let cd_ctx = poise::CooldownContext {
             user_id: new_message.author.id,
             guild_id: new_message.guild_id,
-            channel_id: new_message.channel_id,
+            channel_id,
         };
 
         {
@@ -146,7 +161,7 @@ impl Handler {
                 .await
                 .remaining_cooldown(cd_ctx.clone());
             if let Some(time_remaining) = time_remaining {
-                return Err(UserError::cooldown_hit(new_message.author.id, time_remaining).into());
+                return Err(UserError::cooldown_hit(time_remaining).into());
             }
         }
 
@@ -164,10 +179,6 @@ impl Handler {
             "Received message from {}: `{}`",
             author, &new_message.content
         );
-
-        let persona = framework.user_data.persona_manager
-            .load(new_message.channel_id, new_message.guild_id)
-            .await?;
 
         let result = Self::reply_with_gpt_completion(&ctx, persona, &new_message).await;
 

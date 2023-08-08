@@ -46,7 +46,7 @@ impl Database {
         };
 
         let mut opts = sea_orm::ConnectOptions::new(url);
-        opts.sqlx_logging_level(LevelFilter::Trace);
+        opts.sqlx_logging_level(LevelFilter::Debug);
 
         let connection = sea_orm::Database::connect(opts).await?;
 

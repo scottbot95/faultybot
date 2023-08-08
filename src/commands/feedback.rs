@@ -7,6 +7,7 @@ use crate::permissions::{Permission, validate_access};
 #[name = "Feedback"]
 struct FeedbackModal {
     title: String,
+    #[paragraph]
     description: String,
 }
 
