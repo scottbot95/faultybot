@@ -229,14 +229,14 @@ mod tests {
         };
 
         let guild = Policy {
-            principle: Principle::Guild(GuildId(5)),
+            principle: Principle::Guild(5.into()),
             ..Default::default()
         };
 
         assert_eq!(global.merge_with(guild.clone(), role_cmp), guild);
 
         let channel = Policy {
-            principle: Principle::Channel(ChannelId(123)),
+            principle: Principle::Channel(123.into()),
             ..Default::default()
         };
 

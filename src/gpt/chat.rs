@@ -1,5 +1,6 @@
 use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
-use poise::serenity_prelude::{Context, GuildId, Message, User};
+use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{Context, GuildId, Message};
 use tracing::debug;
 use async_recursion::async_recursion;
 use crate::Error;
@@ -64,8 +65,8 @@ impl Chat {
             let referenced = ctx
                 .http
                 .get_message(
-                    message_reference.channel_id.0,
-                    message_reference.message_id.unwrap().0,
+                    message_reference.channel_id,
+                    message_reference.message_id.unwrap(),
                 )
                 .await;
             if let Ok(referenced) = referenced {
@@ -73,7 +74,7 @@ impl Chat {
             }
         }
 
-        let bot_id = ctx.cache.current_user_id();
+        let bot_id = ctx.cache.current_user().id;
 
         let (role, name) = if message.author.id == bot_id {
             (ChatCompletionMessageRole::Assistant, None)
@@ -104,7 +105,7 @@ impl Chat {
         // TODO use .messages_iter with a Stream instead
         let messages_fut = message
             .channel_id
-            .messages(ctx, |b| b.limit(25).before(message.id))
+            .messages(ctx, serenity::GetMessages::default().limit(25).before(message.id))
             .await?
             .into_iter()
             .rev()
@@ -118,11 +119,14 @@ impl Chat {
 }
 
 async fn bot_name(ctx: &Context, guild_id: Option<GuildId>) -> String {
-    let user: User = ctx.cache.current_user().into();
+    let user = ctx.cache.current_user().clone();
 
     match guild_id {
-        Some(guild_id) => user.nick_in(ctx, guild_id).await.unwrap_or(user.name),
-        None => user.name,
+        Some(guild_id) =>
+            user.nick_in(ctx, guild_id)
+                .await
+                .unwrap_or_else(|| user.name.clone()),
+        None => user.name.clone(),
     }
 }
 
@@ -134,7 +138,7 @@ trait IntoChatCompletionMessage {
 #[poise::async_trait]
 impl IntoChatCompletionMessage for Message {
     async fn into_chat_message(self, ctx: &Context) -> ChatCompletionMessage {
-        let (role, name) = if self.author.id == ctx.cache.current_user_id() {
+        let (role, name) = if self.author.id == ctx.cache.current_user().id {
             (ChatCompletionMessageRole::Assistant, None)
         } else {
             let author_nick = self

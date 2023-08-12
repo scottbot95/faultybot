@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 use poise::serenity_prelude::{ChannelId, Mentionable};
 use entities::sea_orm_active_enums::LlmModel;
 use crate::permissions::{Permission, validate_access, validate_owner};
+use crate::util::say_ephemeral;
 
 
 #[derive(poise::Modal)]
@@ -57,10 +58,8 @@ async fn create(
         model_choice.into(),
     ).await?;
 
-    ctx.send(|b| b
-        .content(format!("Successfully created new persona: {}", persona_data.name))
-        .ephemeral(true)
-    ).await?;
+    let msg = format!("Successfully created new persona: {}", persona_data.name);
+    say_ephemeral(ctx.into(), msg, true).await?;
 
     Ok(())
 }
@@ -114,10 +113,8 @@ async fn edit(
 
     persona_manager.update(new_persona).await?;
 
-    ctx.send(|b| b
-        .content(format!("Successfully updated persona: {}", persona_data.name))
-        .ephemeral(true)
-    ).await?;
+    let msg = format!("Successfully updated persona: {}", persona_data.name);
+    say_ephemeral(ctx.into(), msg, true).await?;
 
     Ok(())
 }
@@ -166,7 +163,7 @@ async fn list(
         }
     }
 
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+    say_ephemeral(ctx, msg, true).await?;
 
     Ok(())
 }
@@ -183,8 +180,7 @@ async fn get(ctx: Context<'_>, #[description = "Name of the persona to fetch det
         .get_with_usage_by_name(name, guild_id)
         .await?;
 
-    ctx.send(|b| b.content(meta.to_string()).ephemeral(true))
-        .await?;
+    say_ephemeral(ctx, meta.to_string(), true).await?;
 
     Ok(())
 }

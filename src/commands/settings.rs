@@ -3,6 +3,7 @@ use crate::permissions::{validate_access, Permission};
 use crate::settings::{SettingsContext, SettingsScopeKind, SettingsValue};
 use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, UserId};
+use crate::util::say_ephemeral;
 
 /// Manage settings for a specific scope
 ///
@@ -72,7 +73,7 @@ async fn set(
         "Successfully updated `{}` to `{}` for {}",
         key, value, updated_scope
     );
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+    say_ephemeral(ctx, msg, true).await?;
 
     Ok(())
 }
@@ -131,7 +132,7 @@ async fn unset(
     };
 
     let msg = format!("Successfully unset `{}` for {}", key, updated_scope);
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+    say_ephemeral(ctx, msg, true).await?;
 
     Ok(())
 }
@@ -201,7 +202,7 @@ async fn get(
         setting.scope()
     );
 
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+    say_ephemeral(ctx, msg, true).await?;
 
     Ok(())
 }

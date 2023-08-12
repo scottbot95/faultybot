@@ -3,6 +3,7 @@ use crate::permissions::policy::{Effect, Policy, PolicyContext, PolicyProvider, 
 use crate::permissions::{validate_access, Permission};
 use crate::{Context, Error};
 use poise::serenity_prelude::{ChannelId, RoleId, UserId};
+use crate::util::say_ephemeral;
 
 /// Manage permissions for a given principle
 #[poise::command(slash_command, subcommands("get", "set"))]
@@ -43,7 +44,7 @@ async fn set(
             .clear_policy(principle, action.clone())
             .await?;
         let msg = format!("Cleared policy for {} to do `{}`", principle, action);
-        ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+        say_ephemeral(ctx, msg, true).await?;
         return Ok(());
     };
 
@@ -71,7 +72,7 @@ async fn set(
     policy_manager.save_policy(&policy).await?;
 
     let msg = format!("Saved policy {:?}", policy);
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+    say_ephemeral(ctx, msg, true).await?;
 
     Ok(())
 }
@@ -105,8 +106,7 @@ async fn get(
         .await?;
 
     let msg = format!("Effective policy: {:?}", policy);
-    ctx.send(|b| b.content(msg).ephemeral(true)).await?;
-
+    say_ephemeral(ctx, msg, true).await?;
     Ok(())
 }
 

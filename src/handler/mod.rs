@@ -10,7 +10,7 @@ use crate::permissions::Permission;
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use tokio::sync::RwLock;
-use crate::util::AuditInfo;
+use crate::util::{AuditInfo, say_ephemeral};
 
 const COOLDOWN_KEY: &str = "chat.cooldown";
 
@@ -18,7 +18,7 @@ pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(
     match error {
         poise::FrameworkError::Command { ctx, error, .. } => {
             handle_error(error, (&ctx).into(), |msg| async move {
-                ctx.send(|b| b.content(msg).ephemeral(true)).await?;
+                say_ephemeral(ctx, msg, true).await?;
                 Ok(())
             })
             .await?;
@@ -62,27 +62,26 @@ pub(crate) struct Handler {
 }
 
 impl Handler {
-    pub fn new(default_config: poise::CooldownConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            cooldowns: RwLock::new(poise::Cooldowns::new(default_config)),
+            cooldowns: RwLock::new(poise::Cooldowns::new()),
         }
     }
 
     pub async fn handle_event<'a>(
         &self,
-        ctx: &'a serenity::Context,
-        event: &'a poise::Event<'a>,
+        event: &'a serenity::FullEvent,
         framework: poise::FrameworkContext<'a, Data, Error>,
         _data: &'a Data,
     ) -> Result<(), Error> {
         match event {
-            poise::Event::Ready { .. } => {
+            serenity::FullEvent::Ready { .. } => {
                 info!("Connected to discord!");
             }
-            poise::Event::Resume { .. } => {
+            serenity::FullEvent::Resume { .. } => {
                 info!("Connection resumed");
             }
-            poise::Event::Message { new_message } => {
+            serenity::FullEvent::Message { ctx, new_message, .. } => {
                 let result = self
                     .handle_message(ctx.clone(), framework, new_message.clone())
                     .await;
@@ -150,16 +149,13 @@ impl Handler {
         };
 
         {
-            let new_config = self.get_config(cd_ctx.clone(), framework.user_data).await?;
-            self.cooldowns.write().await.set_config(new_config);
-        }
+            let config = self.get_config(cd_ctx.clone(), framework.user_data).await?;
 
-        {
             let time_remaining = self
                 .cooldowns
                 .read()
                 .await
-                .remaining_cooldown(cd_ctx.clone());
+                .remaining_cooldown(cd_ctx.clone(), &config);
             if let Some(time_remaining) = time_remaining {
                 return Err(UserError::cooldown_hit(time_remaining).into());
             }
@@ -209,7 +205,7 @@ impl Handler {
         message: &serenity::Message,
     ) -> Result<serenity::Message, Error> {
         let chat_completion = {
-            let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id.0);
+            let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id);
 
             let mut chat = Chat::from(ctx, persona, message).await?;
 
@@ -217,17 +213,17 @@ impl Handler {
         };
 
         if let Some(content) = chat_completion.content {
+            let mut builder = serenity::CreateMessage::default()
+                .content(content);
+            if message.guild_id.is_some() {
+                builder = builder
+                    .reference_message(message)
+                    // Disallow mentions
+                    .allowed_mentions(serenity::CreateAllowedMentions::default());
+            }
             let result = message
                 .channel_id
-                .send_message(&ctx, |builder| {
-                    if message.guild_id.is_some() {
-                        builder
-                            .reference_message(message)
-                            // Disallow mentions
-                            .allowed_mentions(|f| f);
-                    }
-                    builder.content(content)
-                })
+                .send_message(ctx, builder)
                 .await?;
             return Ok(result);
         }

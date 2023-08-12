@@ -1,6 +1,21 @@
 use std::fmt::Display;
 use poise::serenity_prelude::{GuildId, UserId};
 
+/// Utility function to avoid verbose
+/// `ctx.send(crate::CreateReply::default().content(...).ephemeral(...))`
+pub(crate) async fn say_ephemeral<U, E>(
+    ctx: poise::Context<'_, U, E>,
+    msg: impl Into<String>,
+    ephemeral: bool,
+) -> Result<(), poise::serenity_prelude::Error> {
+    ctx.send(
+        poise::CreateReply::default()
+            .content(msg)
+            .ephemeral(ephemeral),
+    )
+        .await?;
+    Ok(())
+}
 /// Used to convert a value from an i64. Primarily used for serenity ID types
 /// so we can serialize them for storing in Postgres which doesn't support unsigned types
 pub trait Fromi64 {

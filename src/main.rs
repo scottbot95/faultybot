@@ -90,67 +90,65 @@ async fn main() {
         .expect("Failed to update db to latest schema");
     info!("Database is connected and up-to-date");
 
-    let framework = poise::Framework::builder()
-        .options(poise::FrameworkOptions {
-            commands: commands::commands_vec(&settings),
-            event_handler: |ctx, event, framework, data: &Data| {
-                Box::pin(async move {
-                    data.handler
-                        .handle_event(ctx, event, framework, data)
-                        .await?;
-
-                    Ok(())
-                })
-            },
-            pre_command: |ctx| Box::pin(async move {
-                crate::metrics::record_command_start(ctx).await
-            }),
-            post_command: |ctx| Box::pin(async move {
-                crate::metrics::record_command_completion(ctx).await
-            }),
-            on_error: |error| {
-                Box::pin(async move {
-                    if let Err(e) = handler::on_error(error).await {
-                        tracing::error!("Error while handling error: {}", e);
-                    }
-                })
-            },
-            prefix_options: poise::PrefixFrameworkOptions {
-                mention_as_prefix: false, // Disable mentions since we handle those directly
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .token(&settings.discord.token)
-        .intents(
-            serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
-        )
-        .setup(|ctx, _ready, framework| {
+    let options = poise::FrameworkOptions {
+        commands: commands::commands_vec(&settings),
+        event_handler: |event, framework, data| {
             Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {
-                    config: settings,
-                    handler: handler::Handler::new(poise::CooldownConfig {
-                        user: Some(Duration::from_secs(10)),
-                        guild: Some(Duration::from_secs(5)),
-                        ..Default::default()
-                    }),
-                    settings_manager: SettingsManager::new(config, db.clone()),
-                    permissions_manager: PermissionsManager::new(
-                        db.clone(),
-                        ctx.clone(),
-                        framework.options().owners.clone(),
-                    ),
-                    octocrab,
-                    persona_manager: PersonaManager::new(db.clone()),
-                })
+                data.handler
+                    .handle_event(event, framework, data)
+                    .await?;
+
+                Ok(())
             })
-        })
-        .build()
+        },
+        pre_command: |ctx| Box::pin(async move {
+            crate::metrics::record_command_start(ctx).await
+        }),
+        post_command: |ctx| Box::pin(async move {
+            crate::metrics::record_command_completion(ctx).await
+        }),
+        on_error: |error| {
+            Box::pin(async move {
+                if let Err(e) = handler::on_error(error).await {
+                    tracing::error!("Error while handling error: {}", e);
+                }
+            })
+        },
+        prefix_options: poise::PrefixFrameworkOptions {
+            mention_as_prefix: false, // Disable mentions since we handle those directly
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let mut client = serenity::Client::builder(
+        &settings.discord.token,
+        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
+    )
+        .framework(poise::Framework::new(
+            options,
+            |ctx, _ready, framework| {
+                Box::pin(async move {
+                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                    Ok(Data {
+                        config: settings,
+                        handler: handler::Handler::new(),
+                        settings_manager: SettingsManager::new(config, db.clone()),
+                        permissions_manager: PermissionsManager::new(
+                            db.clone(),
+                            ctx.clone(),
+                            framework.options().owners.clone(),
+                        ),
+                        octocrab,
+                        persona_manager: PersonaManager::new(db.clone()),
+                    })
+                })
+            },
+        ))
         .await
         .expect("Failed to create Poise Framework");
 
-    let shard_manager = framework.shard_manager().clone();
+    let shard_manager = client.shard_manager.clone();
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
@@ -160,11 +158,11 @@ async fn main() {
     });
 
     periodic_metrics(
-        framework.client().cache_and_http.cache.clone(),
+        client.cache.clone(),
         Duration::from_secs(60),
     );
 
-    if let Err(err) = framework.start().await {
+    if let Err(err) = client.start().await {
         error!("Poise framework error: {:?}", err);
     }
 }

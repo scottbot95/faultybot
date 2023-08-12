@@ -48,30 +48,32 @@ pub async fn feedback(
             write!(&mut issue_description, " in guild {} ({})", guild, guild_name)?;
         }
 
-        ctx.send(|b| b
+        ctx.send(poise::CreateReply::default()
             .content("Submitted suggestion")
-            .embed(|e| e
+            .embed(serenity::CreateEmbed::default()
                 .title(&data.title)
-                .description(&issue_description)
-            )
-            .ephemeral(true)
-        ).await?;
+                .description(&issue_description))
+            .ephemeral(true))
+            .await?;
 
-        let confirmation_message = confirmation_channel.send_message(ctx.serenity_context, |b| b
-            .embed(|e| e
-                .title(&data.title)
-                .description(&issue_description)
-            )
-            .components(|c| c
-                .create_action_row(|row| row
-                    .create_button(|accept| accept
-                        .custom_id("accept")
-                        .label("Accept")
-                        .emoji('✅'))
-                    .create_button(|accept| accept
-                        .custom_id("decline")
-                        .label("Decline")
-                        .emoji('❌')))),
+        let confirmation_message = confirmation_channel.send_message(
+            ctx.serenity_context,
+            serenity::CreateMessage::default()
+                .embed(serenity::CreateEmbed::default()
+                    .title(&data.title)
+                    .description(&issue_description))
+                .components(vec![
+                    serenity::CreateActionRow::Buttons(vec![
+                        serenity::CreateButton::new("accept")
+                            .label("Accept")
+                            .style(serenity::ButtonStyle::Success)
+                            .emoji('✅'),
+                        serenity::CreateButton::new("decline")
+                            .label("Decline")
+                            .style(serenity::ButtonStyle::Danger)
+                            .emoji('❌'),
+                    ])
+                ])
         ).await?;
 
         let interaction = confirmation_message.await_component_interaction(&ctx.serenity_context.shard).await;
@@ -88,14 +90,16 @@ pub async fn feedback(
 
                 let issue_url = issue.html_url;
 
-                confirmation_channel.send_message(ctx.serenity_context, |b| b
-                    .content(format!("Issue submitted: {}", issue_url))
+                confirmation_channel.send_message(
+                    ctx.serenity_context,
+                    serenity::CreateMessage::default()
+                        .content(format!("Issue submitted: {}", issue_url))
                 ).await?;
 
-                ctx.send(|b| b
+                ctx.send(poise::CreateReply::default()
                     .content(format!("Your suggestion has been accepted. {}", issue_url))
-                    .ephemeral(true)
-                ).await?;
+                    .ephemeral(true))
+                    .await?;
             } else if interaction.data.custom_id == "decline" {
                 // Don't care, just delete the interaction
             } else {
