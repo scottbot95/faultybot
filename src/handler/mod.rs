@@ -48,11 +48,18 @@ where
             let error = error.to_string();
             send_message(error).await?;
         }
+        FaultyBotError::Internal(error) => {
+            increment_counter!("errors_total", &metric_labels);
+            tracing::error!("An error occurred in a command: {}", error);
+
+            let error = error.to_string();
+            send_message(error).await?;
+        }
         _ => {
             increment_counter!("errors_total", &metric_labels);
             // Any other error means something went wrong while executing the command
             // Apologize to user and log
-            tracing::error!("An error occured in a command: {}", error);
+            tracing::error!("An error occurred in a command: {}", error);
 
             send_message("Oops! Something went wrong! :(".to_string()).await?;
         }

@@ -2,6 +2,7 @@ mod permissions;
 mod persona;
 mod settings;
 mod feedback;
+mod permissions_v2;
 
 use crate::{Context, Data, Error};
 use crate::settings::config::FaultybotConfig;
@@ -10,6 +11,7 @@ pub fn commands_vec(config: &FaultybotConfig) -> Vec<poise::Command<Data, Error>
     let mut commands = vec![
         help(),
         permissions::permissions(),
+        permissions_v2::permissions(),
         persona::persona(),
         settings::settings()
     ];

@@ -32,6 +32,7 @@ use crate::gpt::PersonaManager;
 
 type Error = error::FaultyBotError;
 type Context<'a> = poise::Context<'a, Data, Error>;
+type Result<T> = std::result::Result<T, Error>;
 
 // Custom user data passed to all command functions
 pub struct Data {
@@ -85,9 +86,9 @@ async fn main() {
     let db = database::Database::connect(&settings.database)
         .await
         .expect("Failed to connect to database");
-    db.migrate()
-        .await
-        .expect("Failed to update db to latest schema");
+    // db.migrate()
+    //     .await
+    //     .expect("Failed to update db to latest schema");
     info!("Database is connected and up-to-date");
 
     let options = poise::FrameworkOptions {

@@ -37,8 +37,12 @@ impl UserError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
+    #[error("Unexpected interaction: {0}")]
+    UnexpectedInteraction(String),
     #[error("Unknown persona: {0}")]
-    UnknownPersona(String)
+    UnknownPersona(String),
+    #[error("Timeout: {0}")]
+    Timeout(String),
 }
 
 impl InternalError {
