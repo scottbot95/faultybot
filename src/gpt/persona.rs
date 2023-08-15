@@ -143,6 +143,7 @@ impl PersonaManager {
     pub async fn get_active_persona(&self, channel_id: ChannelId, guild_id: Option<GuildId>) -> Result<Persona, Error> {
         let mut query = persona::Entity::find()
             .inner_join(active_persona::Entity)
+            .order_by_asc(active_persona::Column::ChannelId)
             .order_by_asc(persona::Column::GuildId)
             .filter(sea_orm::Condition::any()
                 .add(active_persona::Column::ChannelId.eq(channel_id.to_i64()))
