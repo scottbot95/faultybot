@@ -1,11 +1,18 @@
-use poise::serenity_prelude as serenity;
+use poise::{CreateReply, serenity_prelude as serenity};
+use poise::serenity_prelude::{all, ComponentInteraction};
 use serenity::Builder as _;
-use crate::{Context, Result};
+use crate::{Context, Data, Error, Result};
 use crate::error::InternalError;
 use crate::util::say_ephemeral;
+use crate::wizard::{Wizard, WizardStep};
 
 /// Manage permissions for a given principle
-#[poise::command(slash_command, subcommands("create"), rename = "permissions_v2")]
+#[poise::command(
+    slash_command,
+    guild_only,
+    subcommands("create"),
+    rename = "permissions_v2"
+)]
 pub async fn permissions(_ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
@@ -16,9 +23,281 @@ struct SpecifierModal {
     specifier: String,
 }
 
-/// Manage permissions for a given principle
+#[derive(Debug, Default)]
+struct PrincipleStep {
+    roles: Vec<serenity::RoleId>,
+    channels: Vec<serenity::ChannelId>,
+    users: Vec<serenity::UserId>,
+}
+
+#[poise::async_trait]
+impl WizardStep<crate::Data, crate::Error>  for PrincipleStep {
+    type State = PermissionWizard;
+
+    fn create_reply(&self, _input: &Self::State) -> CreateReply {
+        poise::CreateReply::new()
+            .content(build_prompt(PROMPT_PREFIX, &self.channels, &self.roles, &self.users).unwrap())
+            .ephemeral(true)
+            .components(vec![
+                serenity::CreateActionRow::SelectMenu(
+                    serenity::CreateSelectMenu::new("role", serenity::CreateSelectMenuKind::Role)
+                        .placeholder("Select roles:")
+                        .min_values(0)
+                        .max_values(25) // discord max is 25
+                ),
+                serenity::CreateActionRow::SelectMenu(
+                    serenity::CreateSelectMenu::new("channel", serenity::CreateSelectMenuKind::Channel {
+                        channel_types: None,
+                    })
+                        .placeholder("Select Channels:")
+                        .min_values(0)
+                        .max_values(25) // discord max is 25
+                ),
+                serenity::CreateActionRow::SelectMenu(
+                    serenity::CreateSelectMenu::new("user", serenity::CreateSelectMenuKind::User)
+                        .placeholder("Select users:")
+                        .min_values(0)
+                        .max_values(25) // discord max is 25
+                ),
+            ])
+    }
+
+    async fn handle_interaction(&mut self, _ctx: crate::Context<'_>, interaction: serenity::ComponentInteraction) -> Result<bool> {
+        match interaction.data.kind {
+            serenity::ComponentInteractionDataKind::ChannelSelect { values } => self.channels = values,
+            serenity::ComponentInteractionDataKind::RoleSelect { values } => self.roles = values,
+            serenity::ComponentInteractionDataKind::UserSelect { values } => self.users = values,
+            _ => return Ok(false)
+        }
+
+        Ok(true)
+    }
+
+}
+
+#[derive(Debug, Default)]
+struct ResourceStep {
+    resource: Option<String>,
+    specifier: Option<String>,
+}
+
+#[poise::async_trait]
+impl WizardStep<crate::Data, crate::Error> for ResourceStep {
+    type State = PermissionWizard;
+
+    fn is_valid(&self) -> bool {
+        self.resource.is_some()
+    }
+
+    fn create_reply(&self, state: &PermissionWizard) -> CreateReply {
+        let principle = state.principle.as_ref().unwrap();
+        let prompt = build_prompt("What resource to manage permissions for?", &principle.channels, &principle.roles, &principle.users).unwrap();
+        poise::CreateReply::default()
+            .content(prompt)
+            .components(vec![
+                serenity::CreateActionRow::SelectMenu(
+                    serenity::CreateSelectMenu::new("resource", serenity::CreateSelectMenuKind::String {
+                        options: vec![
+                            serenity::CreateSelectMenuOption::new("Persona", "persona")
+                                .description("Manage or chat with a persona")
+                                .default_selection(self.resource == Some("persona".to_string())),
+                            serenity::CreateSelectMenuOption::new("Permissions", "permissions")
+                                .description("Manage permissions")
+                                .default_selection(self.resource == Some("permissions".to_string())),
+                            serenity::CreateSelectMenuOption::new("Settings", "settings")
+                                .description("Manage settings")
+                                .default_selection(self.resource == Some("settings".to_string())),
+                            serenity::CreateSelectMenuOption::new("Feedback", "feedback")
+                                .description("Ability to send feedback to FaultBot developers")
+                                .default_selection(self.resource == Some("feedback".to_string())),
+                        ]
+                    }).placeholder("Select resource")
+                )
+            ])
+    }
+
+    async fn handle_interaction(&mut self, ctx: crate::Context<'_>, interaction: serenity::ComponentInteraction) -> Result<bool> {
+        let slash_ctx = match ctx {
+            Context::Application(ctx) => ctx,
+            _ => unreachable!()
+        };
+
+        match interaction.data.kind {
+            serenity::ComponentInteractionDataKind::StringSelect { values } => self.resource = values.first().cloned(),
+            serenity::ComponentInteractionDataKind::Button => if interaction.data.custom_id.as_str() == "specifier" {
+                use poise::Modal as _;
+                let data = SpecifierModal::execute(slash_ctx).await?;
+                self.specifier = data.map(|v| v.specifier);
+            }
+            _ => return Ok(false)
+        }
+
+        Ok(true)
+    }
+}
+
+#[derive(Debug, Default)]
+struct ActionsStep {
+    selected_actions: Vec<String>
+}
+
+#[poise::async_trait]
+impl WizardStep<crate::Data, crate::Error> for ActionsStep {
+    type State = PermissionWizard;
+
+    fn is_valid(&self) -> bool {
+        !self.selected_actions.is_empty()
+    }
+
+    fn create_reply(&self, state: &Self::State) -> CreateReply {
+        let principle = state.principle.as_ref().unwrap();
+        let resource = state.resource.as_ref().and_then(|r| r.resource.as_ref()).unwrap(); // Next button doesn't work unless resource is set
+        let options = match resource.as_str() {
+            "persona" => vec![
+                serenity::CreateSelectMenuOption::new("Create", "create")
+                    .description("Create a new persona")
+                    .default_selection(self.selected_actions.contains(&"create".to_string())),
+                serenity::CreateSelectMenuOption::new("Chat", "chat")
+                    .description("Chat with a persona")
+                    .default_selection(self.selected_actions.contains(&"chat".to_string())),
+            ],
+            "permissions" => vec![
+                serenity::CreateSelectMenuOption::new("Manage", "manage")
+                    .description("Change permissions")
+                    .default_selection(self.selected_actions.contains(&"manage".to_string())),
+            ],
+            "settings" => vec![
+                serenity::CreateSelectMenuOption::new("Manage", "manage")
+                    .description("Change settings")
+                    .default_selection(self.selected_actions.contains(&"manage".to_string())),
+            ],
+            "feedback" => vec![serenity::CreateSelectMenuOption::new("Send", "send")
+                .description("Send feedback")
+                .default_selection(self.selected_actions.contains(&"send".to_string()))
+            ],
+            _ => unreachable!()
+        };
+        let num_actions = options.len() as u8;
+
+        poise::CreateReply::default()
+            .content(build_prompt(
+                format!("What actions to manage for resource: {}", resource),
+                &principle.channels,
+                &principle.roles,
+                &principle.users
+            ).unwrap())
+            .components(vec![
+                serenity::CreateActionRow::SelectMenu(
+                    serenity::CreateSelectMenu::new("actions", serenity::CreateSelectMenuKind::String {
+                        options,
+                    })
+                        .placeholder("Select actions")
+                        .min_values(1)
+                        .max_values(num_actions)
+                ),
+            ])
+    }
+
+    async fn handle_interaction(&mut self, _ctx: poise::Context<'_, Data, Error>, interaction: serenity::ComponentInteraction) -> std::result::Result<bool, Error> {
+        match interaction.data.kind {
+            serenity::ComponentInteractionDataKind::StringSelect { values } => self.selected_actions = values,
+            _ => return Ok(false)
+        }
+
+        Ok(true)
+    }
+}
+
+#[derive(Debug, Default)]
+struct PermissionWizard {
+    principle: Option<PrincipleStep>,
+    resource: Option<ResourceStep>,
+    actions: Option<ActionsStep>,
+}
+
+#[poise::async_trait]
+impl Wizard<Data, Error> for PermissionWizard {
+
+    async fn execute<'a>(&mut self, ctx: crate::Context<'a>) -> Result<Option<poise::ReplyHandle<'a>>> {
+        tracing::debug!("Running principle step");
+        let mut principle = PrincipleStep::default();
+        let mut msg = if let Some(msg) = crate::wizard::execute_step(
+            &mut principle,
+            ctx,
+            self,
+            None
+        ).await? {
+            msg
+        } else {
+            return Ok(None);
+        };
+        self.principle = Some(principle);
+
+        tracing::debug!("Running resource step");
+        let mut resource = ResourceStep::default();
+        msg = if let Some(msg) = crate::wizard::execute_step(
+            &mut resource,
+            ctx,
+            self,
+            Some(msg)
+        ).await? {
+            msg
+        } else {
+            return Ok(None);
+        };
+        self.resource = Some(resource);
+
+        tracing::debug!("Running actions step");
+        let mut actions = ActionsStep::default();
+        msg = if let Some(msg) = crate::wizard::execute_step(
+            &mut actions,
+            ctx,
+            self,
+            Some(msg)
+        ).await? {
+            msg
+        } else {
+            return Ok(None);
+        };
+        self.actions = Some(actions);
+
+        tracing::debug!("Done!");
+
+        Ok(Some(msg))
+    }
+}
+
 #[poise::command(slash_command)]
 pub async fn create(ctx: Context<'_>) -> Result<()> {
+    let mut wizard = PermissionWizard::default();
+    let handle = if let Some(msg) = wizard.execute(ctx).await? {
+        msg
+    } else {
+        return Ok(());
+    };
+
+    let principle = wizard.principle.unwrap();
+    let resource = wizard.resource.unwrap();
+    let actions = wizard.actions.unwrap();
+    let prefix = format!(
+        "Changing permissions for\nResource: {}/{:?}\nActions:{:?}",
+        resource.resource.unwrap(), resource.specifier, actions.selected_actions
+    );
+    let prompt = build_prompt(prefix, &principle.channels, &principle.roles, &principle.users)?;
+
+    handle.edit(
+        ctx,
+        poise::CreateReply::default()
+            .content(prompt)
+            .components(vec![])
+    ).await?;
+
+    Ok(())
+}
+
+/// Manage permissions for a given principle
+#[poise::command(slash_command)]
+pub async fn create_old(ctx: Context<'_>) -> Result<()> {
     let slash_ctx = match ctx {
         Context::Application(ctx) => ctx,
         _ => unreachable!()
@@ -239,7 +518,7 @@ pub async fn create(ctx: Context<'_>) -> Result<()> {
             .components(vec![
                 serenity::CreateActionRow::SelectMenu(
                     serenity::CreateSelectMenu::new("actions", serenity::CreateSelectMenuKind::String {
-                        options: actions,
+                        options: actions.clone(),
                     })
                         .placeholder("Select actions")
                         .min_values(1)
@@ -249,11 +528,12 @@ pub async fn create(ctx: Context<'_>) -> Result<()> {
                     serenity::CreateButton::new("next")
                         .label("Next")
                         .style(serenity::ButtonStyle::Primary)
+                        .disabled(true)
                 ]),
             ]),
     ).await?;
 
-    let mut actions = vec![];
+    let mut selected_actions = vec![];
     let mut complete = false;
     while let Some(interaction) = message
         .await_component_interactions(ctx)
@@ -262,10 +542,10 @@ pub async fn create(ctx: Context<'_>) -> Result<()> {
         .await
     {
         match interaction.data.kind {
-            serenity::ComponentInteractionDataKind::StringSelect { values } => actions = values,
+            serenity::ComponentInteractionDataKind::StringSelect { values } => selected_actions = values,
             // stop listening on the next button
             serenity::ComponentInteractionDataKind::Button => if interaction.data.custom_id == "next" {
-                if !actions.is_empty() {
+                if !selected_actions.is_empty() {
                     complete = true;
                     break;
                 }
@@ -282,11 +562,27 @@ pub async fn create(ctx: Context<'_>) -> Result<()> {
             .execute(ctx.serenity_context(), (interaction.id, &interaction.token))
             .await?;
 
-        let prefix = format!("What actions to manage for resource: {:?}", actions);
+        let prefix = format!("What actions to manage for resource: {:?}", resource);
         handle.edit(
             ctx,
             poise::CreateReply::default()
-                .content(build_prompt(prefix, &channels, &roles, &users)?),
+                .content(build_prompt(prefix, &channels, &roles, &users)?)
+                .components(vec![
+                    serenity::CreateActionRow::SelectMenu(
+                        serenity::CreateSelectMenu::new("actions", serenity::CreateSelectMenuKind::String {
+                            options: actions.clone(),
+                        })
+                            .placeholder("Select actions")
+                            .min_values(1)
+                            .max_values(num_actions)
+                    ),
+                    serenity::CreateActionRow::Buttons(vec![
+                        serenity::CreateButton::new("next")
+                            .label("Next")
+                            .style(serenity::ButtonStyle::Primary)
+                            .disabled(!selected_actions.is_empty())
+                    ]),
+                ]),
         ).await?;
     }
 
@@ -294,7 +590,7 @@ pub async fn create(ctx: Context<'_>) -> Result<()> {
         return Err(InternalError::Timeout("waiting for action selection".to_string()).into());
     }
 
-    let prefix = format!("Changing permissions for\nResource: {}/{:?}\nActions:{:?}", resource, specifier, actions);
+    let prefix = format!("Changing permissions for\nResource: {}/{:?}\nActions:{:?}", resource, specifier, selected_actions);
     let msg = build_prompt(prefix, &channels, &roles, &users)?;
 
     handle.edit(

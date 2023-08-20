@@ -10,6 +10,7 @@ mod permissions;
 #[cfg(test)]
 mod test_util;
 mod util;
+mod wizard;
 
 use dotenvy::dotenv;
 
@@ -119,6 +120,7 @@ async fn main() {
             mention_as_prefix: false, // Disable mentions since we handle those directly
             ..Default::default()
         },
+        initialize_owners: true,
         ..Default::default()
     };
 

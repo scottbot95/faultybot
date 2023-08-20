@@ -8,6 +8,10 @@ pub(crate) async fn say_ephemeral<U, E>(
     msg: impl Into<String>,
     ephemeral: bool,
 ) -> Result<(), poise::serenity_prelude::Error> {
+    let msg = msg.into();
+    let guild_id = ctx.guild_id().map(|g|g.to_string()).unwrap_or_else(|| "None".to_string());
+    let channel_id = ctx.channel_id().to_string();
+    tracing::debug!(guild_id, channel_id, "Sending message \"{}\"", msg);
     ctx.send(
         poise::CreateReply::default()
             .content(msg)
