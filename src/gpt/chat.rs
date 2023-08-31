@@ -3,7 +3,9 @@ use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Context, GuildId, Message};
 use tracing::debug;
 use async_recursion::async_recursion;
+use tokio_stream::StreamExt;
 use crate::Error;
+use crate::error::FaultyBotError;
 use crate::gpt::persona::Persona;
 
 pub struct Chat {
@@ -57,6 +59,24 @@ impl Chat {
         self.messages.push(choice.clone());
 
         Ok(choice)
+    }
+
+    /// Returns a stream of completions for this [Chat].
+    ///
+    /// Does NOT update internal state and so take ownership of [Chat] to prevent accidental misuse
+    pub async fn stream_completion(self) -> Result<impl tokio_stream::Stream<Item=openai::chat::ChatCompletionMessageDelta>, Error> {
+        use tokio_stream::StreamExt as _;
+
+        let rx = ChatCompletion::builder(&self.model, self.messages.clone())
+            .create_stream()
+            .await
+            .map_err( FaultyBotError::boxed)?;
+
+        let stream = tokio_stream::wrappers::ReceiverStream::new(rx)
+            .filter(|c| c.choices.first().unwrap().finish_reason.is_none())
+            .map(|c| c.choices.first().unwrap().delta.clone());
+
+        Ok(stream)
     }
 
     #[async_recursion]

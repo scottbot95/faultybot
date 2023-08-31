@@ -59,4 +59,11 @@ pub enum FaultyBotError {
     Json(#[from] serde_json::Error),
     Config(#[from] config::ConfigError),
     Octocrab(#[from] octocrab::Error),
+    Boxed(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl FaultyBotError {
+    pub fn boxed<E: std::error::Error + Send + Sync + 'static>(err: E) -> Self {
+        Self::Boxed(Box::new(err))
+    }
 }

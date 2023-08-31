@@ -1,4 +1,6 @@
+use std::fmt::Write;
 use crate::gpt::Chat;
+use itertools::Itertools;
 use metrics::{histogram, increment_counter};
 use std::future::Future;
 use std::time::Duration;
@@ -9,10 +11,12 @@ use crate::error::{FaultyBotError, UserError};
 use crate::permissions::Permission;
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::{Context, Message};
 use tokio::sync::RwLock;
 use crate::util::{AuditInfo, say_ephemeral};
 
 const COOLDOWN_KEY: &str = "chat.cooldown";
+const MAX_MESSAGE_SIZE: usize = 1950;
 
 pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(), Error> {
     match error {
@@ -162,6 +166,7 @@ impl Handler {
         }
 
         let start = Instant::now();
+        let msg_sent = new_message.timestamp.clone();
 
         let author = new_message
             .author_nick(&ctx)
@@ -176,7 +181,7 @@ impl Handler {
             author, &new_message.content
         );
 
-        let result = Self::reply_with_gpt_completion(&ctx, persona, &new_message).await;
+        let result = Self::reply_with_gpt_completion(&ctx, persona, new_message).await;
 
         if let Err(err) = result {
             increment_counter!("gpt_errors_total", &metric_labels);
@@ -186,7 +191,7 @@ impl Handler {
         }
 
         let delay =
-            serenity::Timestamp::now().fixed_offset() - new_message.timestamp.fixed_offset();
+            serenity::Timestamp::now().fixed_offset() - msg_sent.fixed_offset();
         let delay = delay.to_std().unwrap(); // duration can never be negative unless users send message in the future
         let duration = start.elapsed();
         histogram!("gpt_response_seconds", duration.as_secs_f64(), &metric_labels);
@@ -202,33 +207,77 @@ impl Handler {
     async fn reply_with_gpt_completion(
         ctx: &serenity::Context,
         persona: crate::gpt::Persona,
-        message: &serenity::Message,
+        message: serenity::Message,
     ) -> Result<serenity::Message, Error> {
-        let chat_completion = {
-            let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id);
+        let _typing = serenity::Typing::start(ctx.http.clone(), message.channel_id);
 
-            let mut chat = Chat::from(ctx, persona, message).await?;
+        let chat = Chat::from(ctx, persona, &message).await?;
+        let stream = chat.stream_completion().await?;
 
-            chat.completion().await?
-        };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(Self::produce_message_chunks(stream, tx));
 
-        if let Some(content) = chat_completion.content {
-            let mut builder = serenity::CreateMessage::default()
-                .content(content);
-            if message.guild_id.is_some() {
-                builder = builder
-                    .reference_message(message)
-                    // Disallow mentions
-                    .allowed_mentions(serenity::CreateAllowedMentions::default());
-            }
-            let result = message
-                .channel_id
-                .send_message(ctx, builder)
-                .await?;
-            return Ok(result);
+        let mut last_msg: serenity::Message = message;
+        while let Some(content) = rx.recv().await {
+            last_msg = Self::send_reply(ctx, &last_msg, content).await?;
         }
 
-        panic!("FaultyBot does not support GPT function calls (yet?)")
+        // Ok(last_msg.expect("ChatGPT API didn't return any response"))
+        Ok(last_msg)
+    }
+
+    async fn produce_message_chunks(
+        mut stream: impl tokio_stream::Stream<Item=openai::chat::ChatCompletionMessageDelta> + Unpin,
+        tx: tokio::sync::mpsc::Sender<String>
+    ) -> Result<(), Error> {
+        use tokio_stream::StreamExt as _;
+
+        let mut buffer = String::with_capacity(MAX_MESSAGE_SIZE);
+
+        while let Some(delta) = stream.next().await {
+            match delta.role {
+                None => (),
+                Some(openai::chat::ChatCompletionMessageRole::Assistant) => (),
+                _ => continue // ignore everything not for the assistant
+            }
+
+            if let Some(content) = delta.content {
+                buffer.write_str(content.as_str())?;
+
+                while buffer.len() > MAX_MESSAGE_SIZE {
+                    let chars_to_take = find_last_whitespace_before_index(&buffer, MAX_MESSAGE_SIZE).unwrap_or(MAX_MESSAGE_SIZE - 2 ) + 1;
+                    tx.send(buffer[..chars_to_take].to_owned())
+                        .await
+                        .map_err(Error::boxed)?;
+                    buffer = buffer[chars_to_take..].to_owned();
+                }
+            } else {
+                tracing::warn!("Stream delta with no content detected: {:?}", delta);
+            }
+        }
+
+        tx.send(buffer).await.map_err(Error::boxed)?;
+
+        Ok(())
+    }
+
+    async fn send_reply(ctx: &Context, message: &Message, content: impl Into<String>) -> Result<Message, Error> {
+        let content = content.into();
+        tracing::debug!("Sending GPT response message: {}", content);
+
+        let mut builder = serenity::CreateMessage::default()
+            .content(content);
+        if message.guild_id.is_some() {
+            builder = builder
+                .reference_message(message)
+                // Disallow mentions
+                .allowed_mentions(serenity::CreateAllowedMentions::default());
+        }
+        let result = message
+            .channel_id
+            .send_message(ctx, builder)
+            .await?;
+        Ok(result)
     }
 
     async fn get_config(
@@ -269,4 +318,13 @@ impl Handler {
 
         Ok(config)
     }
+}
+
+fn find_last_whitespace_before_index(input_str: &str, index: usize) -> Option<usize> {
+    for (i, c) in input_str.char_indices().rev() {
+        if i < index && c.is_whitespace() {
+            return Some(i);
+        }
+    }
+    None
 }
