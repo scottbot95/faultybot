@@ -36,6 +36,7 @@ async fn create(
     let guild_id = ctx.guild_id().unwrap(); // guild_only command
 
     validate_access(&ctx, Permission::CreatePersona).await?;
+    validate_model_access(&ctx, &model_choice).await?;
 
     let ctx = match ctx {
         Context::Application(ctx) => ctx,
@@ -77,6 +78,7 @@ async fn edit(
     let guild_id = ctx.guild_id().unwrap(); // guild_only command
 
     validate_access(&ctx, Permission::EditPersona(Some(name.clone()))).await?;
+    validate_model_access(&ctx, &model_choice).await?;
 
     let persona_manager = &ctx.data().persona_manager;
 
@@ -185,15 +187,17 @@ async fn get(ctx: Context<'_>, #[description = "Name of the persona to fetch det
     Ok(())
 }
 
-#[derive(poise::ChoiceParameter)]
+#[derive(PartialEq, poise::ChoiceParameter)]
 pub enum ModelChoice {
-    Gpt35
+    Gpt35,
+    Gpt4
 }
 
 impl Display for ModelChoice {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match self {
-            ModelChoice::Gpt35 => "GPT 3.5"
+            ModelChoice::Gpt35 => "GPT 3.5",
+            ModelChoice::Gpt4 => "GPT 3"
         };
         write!(f, "{}", name)
     }
@@ -209,6 +213,16 @@ impl From<ModelChoice> for LlmModel {
     fn from(choice: ModelChoice) -> Self {
         match choice {
             ModelChoice::Gpt35 => LlmModel::Gpt35Turbo,
+            ModelChoice::Gpt4 => LlmModel::Gpt4,
         }
     }
+}
+
+async fn validate_model_access(ctx: &Context<'_>, model_choice: &Option<ModelChoice>) -> Result<(), Error> {
+    if let Some(choice) = &model_choice {
+        if choice != &ModelChoice::default() {
+            validate_access(&ctx, Permission::UseModel(Some(choice.to_string()))).await?;
+        }
+    }
+    Ok(())
 }

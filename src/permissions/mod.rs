@@ -22,6 +22,7 @@ pub enum Permission {
     EditPersona(Option<String>),
     UsePersona(Option<String>),
     DeletePersona(Option<String>),
+    UseModel(Option<String>),
 }
 
 impl Permission {
@@ -38,6 +39,7 @@ impl Permission {
             Permission::EditPersona(_) => "persona.edit",
             Permission::UsePersona(_) => "persona.use",
             Permission::DeletePersona(_) => "persona.delete",
+            Permission::UseModel(_) => "model.use",
         }
     }
 
@@ -52,6 +54,7 @@ impl Permission {
             Permission::EditPersona(specifier) => specifier,
             Permission::UsePersona(specifier) => specifier,
             Permission::DeletePersona(specifier) => specifier,
+            Permission::UseModel(specifier) => specifier,
             _ => &None,
         };
 
