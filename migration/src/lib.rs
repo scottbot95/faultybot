@@ -4,6 +4,7 @@ mod m20230805_205921_remove_guild_from_role;
 mod m20230806_020929_create_personas;
 mod m20230808_030829_seed_default_personas;
 mod m20230830_031030_gpt_4;
+// mod m20230812_185821_permissions_v2;
 
 pub use sea_orm_migration::prelude::*;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230806_020929_create_personas::Migration),
             Box::new(m20230808_030829_seed_default_personas::Migration),
             Box::new(m20230830_031030_gpt_4::Migration),
+            // Box::new(m20230812_185821_permissions_v2::Migration),
         ]
     }
 }

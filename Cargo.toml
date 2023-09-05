@@ -7,7 +7,7 @@ description = "Discord bot writen by FaultyMuse"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = [".", "entities", "migration"]
+members = [".", "entities", "macros", "migration"]
 
 [workspace.dependencies]
 sea-orm = "0.12.1"
@@ -38,6 +38,7 @@ lazy_static = "1.4.0"
 h2 = "0.3.20"
 
 entities = { path = "entities" }
+macros = { path = "macros" }
 migration = { path = "migration" }
 
 [dependencies.clap]

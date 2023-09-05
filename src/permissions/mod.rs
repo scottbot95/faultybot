@@ -1,5 +1,7 @@
 pub mod policy;
 pub mod policy_manager;
+mod resources;
+mod v2;
 
 use crate::error::UserError;
 use crate::permissions::policy::{Effect, PolicyProvider};
