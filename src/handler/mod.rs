@@ -1,8 +1,8 @@
 use std::fmt::Write;
 use crate::gpt::Chat;
-use itertools::Itertools;
 use metrics::{histogram, increment_counter};
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{debug, error, info};
@@ -11,7 +11,7 @@ use crate::error::{FaultyBotError, UserError};
 use crate::permissions::Permission;
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
-use poise::serenity_prelude::{Context, Message};
+use poise::serenity_prelude::{CacheHttp, Context, Message};
 use tokio::sync::RwLock;
 use crate::util::{AuditInfo, say_ephemeral};
 
@@ -74,24 +74,24 @@ impl Handler {
 
     pub async fn handle_event<'a>(
         &self,
+        ctx: poise::FrameworkContext<'a, Data, Error>, 
         event: &'a serenity::FullEvent,
-        framework: poise::FrameworkContext<'a, Data, Error>,
-        _data: &'a Data,
     ) -> Result<(), Error> {
         match event {
             serenity::FullEvent::Ready { .. } => {
                 info!("Connected to discord!");
+                poise::builtins::register_globally(ctx.serenity_context.http(), &ctx.options.commands).await?;
             }
             serenity::FullEvent::Resume { .. } => {
                 info!("Connection resumed");
             }
-            serenity::FullEvent::Message { ctx, new_message, .. } => {
+            serenity::FullEvent::Message { new_message } => {
                 let result = self
-                    .handle_message(ctx.clone(), framework, new_message.clone())
+                    .handle_message(ctx.clone(), new_message.clone())
                     .await;
                 if let Err(err) = result {
                     handle_error(err, new_message.into(), |msg| async move {
-                        new_message.reply(ctx, msg).await?;
+                        new_message.reply(ctx.serenity_context.http(), msg).await?;
                         Ok(())
                     })
                     .await?;
@@ -105,40 +105,39 @@ impl Handler {
 
     async fn handle_message<'a>(
         &self,
-        ctx: serenity::Context,
-        framework: poise::FrameworkContext<'a, Data, Error>,
+        ctx: poise::FrameworkContext<'a, Data, Error>,
         new_message: serenity::Message,
     ) -> Result<(), Error> {
         // Ignore self messages
-        if new_message.author.id == framework.bot_id {
+        if new_message.author.id == ctx.bot_id() {
             return Ok(());
         }
 
         tracing::trace!("Received message: {:?}", new_message);
 
         // Only reply to DMs and direct mentions
-        if new_message.guild_id.is_some() && !new_message.mentions_user_id(framework.bot_id) {
+        if new_message.guild_id.is_some() && !new_message.mentions_user_id(ctx.bot_id()) {
             return Ok(());
         }
 
         let channel_id = new_message
-            .channel(&ctx)
+            .channel(ctx.serenity_context)
             .await?
             .guild()
             .and_then(|c| c.thread_metadata.map(|_| c.parent_id))
             .flatten()
             .unwrap_or(new_message.channel_id);
 
-        let persona = framework.user_data
+        let persona = ctx.user_data()
             .persona_manager
             .get_active_persona(channel_id, new_message.guild_id)
             .await?;
 
         // validate access
-        framework
-            .user_data
+        ctx.user_data()
             .permissions_manager
             .enforce(
+                ctx,
                 new_message.author.id,
                 channel_id,
                 new_message.guild_id,
@@ -153,7 +152,7 @@ impl Handler {
         };
 
         {
-            let config = self.get_config(cd_ctx.clone(), framework.user_data).await?;
+            let config = self.get_config(cd_ctx.clone(), ctx.user_data()).await?;
 
             let time_remaining = self
                 .cooldowns
@@ -169,9 +168,9 @@ impl Handler {
         let msg_sent = new_message.timestamp.clone();
 
         let author = new_message
-            .author_nick(&ctx)
+            .author_nick(&ctx.serenity_context)
             .await
-            .unwrap_or_else(|| new_message.author.name.clone());
+            .unwrap_or_else(|| new_message.author.name.clone().into_string());
 
         let metric_labels = AuditInfo::from(&new_message).as_metric_labels();
         increment_counter!("gpt_requests_total", &metric_labels);
@@ -181,7 +180,7 @@ impl Handler {
             author, &new_message.content
         );
 
-        let result = Self::reply_with_gpt_completion(&ctx, persona, new_message).await;
+        let result = Self::reply_with_gpt_completion(ctx.serenity_context, persona, new_message).await;
 
         if let Err(err) = result {
             increment_counter!("gpt_errors_total", &metric_labels);
@@ -275,7 +274,7 @@ impl Handler {
         }
         let result = message
             .channel_id
-            .send_message(ctx, builder)
+            .send_message(ctx.http(), builder)
             .await?;
         Ok(result)
     }
@@ -283,7 +282,7 @@ impl Handler {
     async fn get_config(
         &self,
         ctx: poise::CooldownContext,
-        user_data: &Data,
+        user_data: Arc<Data>,
     ) -> Result<poise::CooldownConfig, Error> {
         let config = poise::CooldownConfig {
             global: user_data

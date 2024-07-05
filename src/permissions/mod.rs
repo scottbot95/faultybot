@@ -4,11 +4,11 @@ pub mod policy_manager;
 use crate::error::UserError;
 use crate::permissions::policy::{Effect, PolicyProvider};
 use crate::permissions::policy_manager::PolicyManager;
-use crate::Error;
+use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 use serenity::{ChannelId, GuildId, UserId};
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
+use poise::serenity_prelude::small_fixed_array::FixedArray;
 
 pub enum Permission {
     Chat(Option<String>),
@@ -80,6 +80,7 @@ pub async fn validate_access(
     ctx.data()
         .permissions_manager
         .enforce(
+            ctx.framework(),
             ctx.author().id,
             ctx.channel_id(),
             ctx.guild_id(),
@@ -98,32 +99,27 @@ pub fn validate_owner(ctx: &crate::Context<'_>) -> Result<(), Error> {
 
 pub struct PermissionsManager {
     policy_manager: PolicyManager,
-    serenity_ctx: serenity::Context,
-    owners: HashSet<UserId>,
 }
 
 impl PermissionsManager {
     pub fn new(
         db: crate::database::Database,
-        ctx: serenity::Context,
-        owners: HashSet<UserId>,
     ) -> Self {
         Self {
             policy_manager: PolicyManager::new(db),
-            serenity_ctx: ctx,
-            owners,
         }
     }
 
     pub async fn enforce(
         &self,
+        ctx: poise::FrameworkContext<'_, Data, Error>,
         user_id: UserId,
         channel_id: ChannelId,
         guild_id: Option<GuildId>,
         permission: Permission,
     ) -> Result<(), Error> {
         // Bot owners are super-user
-        if self.owners.contains(&user_id) {
+        if ctx.options.owners.contains(&user_id) {
             return Ok(());
         }
 
@@ -139,10 +135,10 @@ impl PermissionsManager {
          */
 
         let roles = if let Some(guild_id) = guild_id {
-            guild_id.member(&self.serenity_ctx, user_id).await?.roles
+            guild_id.member(ctx.serenity_context, user_id).await?.roles
         } else {
-            vec![]
-        };
+            FixedArray::empty()
+        }.into_vec();
 
         let policy_ctx = policy::PolicyContext {
             guild_id,
@@ -153,7 +149,7 @@ impl PermissionsManager {
 
         let policy = self
             .policy_manager
-            .effective_policy(&self.serenity_ctx, policy_ctx, permission.to_string())
+            .effective_policy(ctx.serenity_context, policy_ctx, permission.to_string())
             .await?;
 
         match policy.effect {

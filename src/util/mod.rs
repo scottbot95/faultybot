@@ -1,19 +1,19 @@
+use std::borrow::Cow;
 use std::fmt::Display;
 use poise::serenity_prelude::{GuildId, UserId};
 
 /// Utility function to avoid verbose
 /// `ctx.send(crate::CreateReply::default().content(...).ephemeral(...))`
-pub(crate) async fn say_ephemeral<U, E>(
-    ctx: poise::Context<'_, U, E>,
-    msg: impl Into<String>,
+pub(crate) async fn say_ephemeral<'a, U: Send + Sync + 'static, E>(
+    ctx: poise::Context<'a, U, E>,
+    msg: impl Into<Cow<'a, str>>,
     ephemeral: bool,
 ) -> Result<(), poise::serenity_prelude::Error> {
     ctx.send(
         poise::CreateReply::default()
             .content(msg)
             .ephemeral(ephemeral),
-    )
-        .await?;
+    ).await?;
     Ok(())
 }
 /// Used to convert a value from an i64. Primarily used for serenity ID types
@@ -78,7 +78,7 @@ impl From<&poise::serenity_prelude::Message> for AuditInfo {
     }
 }
 
-impl<'a, U, E> From<&poise::Context<'a, U, E>> for AuditInfo {
+impl<'a, U: Send + Sync + 'static, E> From<&poise::Context<'a, U, E>> for AuditInfo {
     fn from(ctx: &poise::Context<'a, U, E>) -> Self {
         Self {
             user_id: ctx.author().id,

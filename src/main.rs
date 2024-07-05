@@ -92,10 +92,10 @@ async fn main() {
 
     let options = poise::FrameworkOptions {
         commands: commands::commands_vec(&settings),
-        event_handler: |event, framework, data| {
+        event_handler: |ctx, event| {
             Box::pin(async move {
-                data.handler
-                    .handle_event(event, framework, data)
+                ctx.user_data().handler
+                    .handle_event(ctx, event)
                     .await?;
 
                 Ok(())
@@ -125,26 +125,15 @@ async fn main() {
         &settings.discord.token,
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
     )
-        .framework(poise::Framework::new(
-            options,
-            |ctx, _ready, framework| {
-                Box::pin(async move {
-                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                    Ok(Data {
-                        config: settings,
-                        handler: handler::Handler::new(),
-                        settings_manager: SettingsManager::new(config, db.clone()),
-                        permissions_manager: PermissionsManager::new(
-                            db.clone(),
-                            ctx.clone(),
-                            framework.options().owners.clone(),
-                        ),
-                        octocrab,
-                        persona_manager: PersonaManager::new(db.clone()),
-                    })
-                })
-            },
-        ))
+        .framework(poise::Framework::new(options))
+        .data(Arc::new(Data {
+            config: settings,
+            handler: handler::Handler::new(),
+            settings_manager: SettingsManager::new(config, db.clone()),
+            permissions_manager: PermissionsManager::new(db.clone()),
+            octocrab,
+            persona_manager: PersonaManager::new(db.clone()),
+        }))
         .await
         .expect("Failed to create Poise Framework");
 
@@ -154,7 +143,7 @@ async fn main() {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
-        shard_manager.lock().await.shutdown_all().await;
+        shard_manager.shutdown_all().await;
     });
 
     periodic_metrics(

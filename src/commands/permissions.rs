@@ -33,7 +33,8 @@ async fn set(
     let action = permission.into_permission(specifier).to_string();
     validate_access(&ctx, Permission::SetPermission(Some(action.clone()))).await?;
 
-    let policy_manager = ctx.data().permissions_manager.as_ref();
+    let perm_manager = &ctx.data().permissions_manager;
+    let policy_manager = perm_manager.as_ref();
 
     let principle = get_principle(&ctx, channel, user, role)?;
 
@@ -102,7 +103,7 @@ async fn get(
         .data()
         .permissions_manager
         .as_ref()
-        .effective_policy(ctx, policy_ctx, action)
+        .effective_policy(ctx.serenity_context(), policy_ctx, action)
         .await?;
 
     let msg = format!("Effective policy: {:?}", policy);

@@ -137,7 +137,7 @@ pub trait PolicyProvider<E> {
     /// Guaranteed to return a policy
     async fn effective_policy(
         &self,
-        cache: impl AsRef<poise::serenity_prelude::Cache> + Send,
+        serenity_context: &poise::serenity_prelude::Context,
         ctx: PolicyContext,
         action: String,
     ) -> Result<Policy, E>
@@ -179,7 +179,13 @@ pub trait PolicyProvider<E> {
         policies.extend(role_policies);
 
         let combined = Policy::combined(policies, |lhs, rhs| {
-            match (lhs.to_role_cached(&cache), rhs.to_role_cached(&cache)) {
+            let Some(guild) = ctx.guild_id.and_then(|g| serenity_context.cache.guild(g)) else {
+                return Ordering::Equal;
+            };
+            let roles = &guild.roles;
+            let lhs = roles.get(&lhs);
+            let rhs = roles.get(&rhs);
+            match (lhs, rhs) {
                 (Some(_), None) => Ordering::Greater,
                 (None, Some(_)) => Ordering::Less,
                 (Some(lhs), Some(rhs)) => lhs.cmp(&rhs),

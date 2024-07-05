@@ -3,7 +3,6 @@ use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Context, GuildId, Message};
 use tracing::debug;
 use async_recursion::async_recursion;
-use tokio_stream::StreamExt;
 use crate::Error;
 use crate::error::FaultyBotError;
 use crate::gpt::persona::Persona;
@@ -102,7 +101,7 @@ impl Chat {
             let author_nick = message
                 .author_nick(ctx)
                 .await
-                .unwrap_or_else(|| message.author.name.clone());
+                .unwrap_or_else(|| message.author.name.clone().into_string());
 
             (ChatCompletionMessageRole::User, Some(author_nick))
         };
@@ -110,7 +109,7 @@ impl Chat {
         let chat_message = ChatCompletionMessage {
             role,
             name,
-            content: Some(message.content.clone()),
+            content: Some(message.content.clone().into_string()),
             function_call: None,
         };
 
@@ -145,8 +144,8 @@ async fn bot_name(ctx: &Context, guild_id: Option<GuildId>) -> String {
         Some(guild_id) =>
             user.nick_in(ctx, guild_id)
                 .await
-                .unwrap_or_else(|| user.name.clone()),
-        None => user.name.clone(),
+                .unwrap_or_else(|| user.name.clone().into_string()),
+        None => user.name.clone().into_string(),
     }
 }
 
@@ -164,7 +163,7 @@ impl IntoChatCompletionMessage for Message {
             let author_nick = self
                 .author_nick(ctx)
                 .await
-                .unwrap_or_else(|| self.author.name.clone());
+                .unwrap_or_else(|| self.author.name.clone().into_string());
 
             (ChatCompletionMessageRole::User, Some(author_nick))
         };
@@ -172,7 +171,7 @@ impl IntoChatCompletionMessage for Message {
         ChatCompletionMessage {
             role,
             name,
-            content: Some(self.content.clone()),
+            content: Some(self.content.clone().into_string()),
             function_call: None,
         }
     }
