@@ -15,6 +15,6 @@ pub enum Effect {
 pub enum LlmModel {
     #[sea_orm(string_value = "gpt-3.5-turbo")]
     Gpt35Turbo,
-    #[sea_orm(string_value = "gpt-4")]
+    #[sea_orm(string_value = "gpt-4o")]
     Gpt4,
 }

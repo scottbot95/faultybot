@@ -110,7 +110,7 @@ async fn edit(
     if let Some(model) = model_choice {
         new_persona.model = model.into();
     }
-    new_persona.name = persona_data.name.clone();
+    new_persona.name.clone_from(&persona_data.name);
     new_persona.prompt = persona_data.prompt;
 
     persona_manager.update(new_persona).await?;
@@ -197,7 +197,7 @@ impl Display for ModelChoice {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             ModelChoice::Gpt35 => "GPT 3.5",
-            ModelChoice::Gpt4 => "GPT 3"
+            ModelChoice::Gpt4 => "GPT 4"
         };
         write!(f, "{}", name)
     }
@@ -221,7 +221,7 @@ impl From<ModelChoice> for LlmModel {
 async fn validate_model_access(ctx: &Context<'_>, model_choice: &Option<ModelChoice>) -> Result<(), Error> {
     if let Some(choice) = &model_choice {
         if choice != &ModelChoice::default() {
-            validate_access(&ctx, Permission::UseModel(Some(choice.to_string()))).await?;
+            validate_access(ctx, Permission::UseModel(Some(choice.to_string()))).await?;
         }
     }
     Ok(())

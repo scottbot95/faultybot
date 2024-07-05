@@ -87,7 +87,7 @@ impl Handler {
             }
             serenity::FullEvent::Message { new_message } => {
                 let result = self
-                    .handle_message(ctx.clone(), new_message.clone())
+                    .handle_message(ctx, new_message.clone())
                     .await;
                 if let Err(err) = result {
                     handle_error(err, new_message.into(), |msg| async move {
@@ -165,7 +165,7 @@ impl Handler {
         }
 
         let start = Instant::now();
-        let msg_sent = new_message.timestamp.clone();
+        let msg_sent = new_message.timestamp;
 
         let author = new_message
             .author_nick(&ctx.serenity_context)

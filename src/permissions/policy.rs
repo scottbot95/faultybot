@@ -188,7 +188,7 @@ pub trait PolicyProvider<E> {
             match (lhs, rhs) {
                 (Some(_), None) => Ordering::Greater,
                 (None, Some(_)) => Ordering::Less,
-                (Some(lhs), Some(rhs)) => lhs.cmp(&rhs),
+                (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
                 (None, None) => Ordering::Equal, // Just assume equal I guess w/e
             }
         });
