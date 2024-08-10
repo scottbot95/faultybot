@@ -10,22 +10,21 @@ description = "Discord bot writen by FaultyMuse"
 members = [".", "entities", "migration"]
 
 [workspace.dependencies]
-sea-orm = "0.12.1"
-sea-orm-migration = "0.12.1"
+sea-orm = "1.0.0"
+sea-orm-migration = "1.0.0"
 
 [dependencies]
 async-recursion = "1.0.4"
 chrono = "0.4.26"
-derive_more = "0.99.17"
 derivative = "2.2.0"
 dotenvy = "0.15.6"
 futures = "0.3.28"
 humantime = "2.1.0"
-itertools = "0.11"
-metrics = "0.21.0"
-metrics-exporter-statsd = "0.5.0"
-metrics-util = "0.15.0"
-octocrab = "0.28.0"
+itertools = "0.13.0"
+metrics = "0.23.0"
+metrics-exporter-statsd = "0.8.0"
+metrics-util = "0.17.0"
+octocrab = "0.39.0"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "1.0"
@@ -35,7 +34,7 @@ tracing-subscriber = "0.3.17"
 lazy_static = "1.4.0"
 
 # <0.3.17 has a CVE
-h2 = "0.3.20"
+#h2 = "0.3.20"
 
 entities = { path = "entities" }
 migration = { path = "migration" }
@@ -45,16 +44,20 @@ version = "4.3.11"
 features = [ "derive" ]
 
 [dependencies.config]
-version = "0.13.3"
+version = "0.14.0"
 features = [ "yaml" ]
 
+[dependencies.derive_more]
+version = "1.0.0"
+features = [ "display" ]
+
 [dependencies.metrics-exporter-prometheus]
-version = "0.12.0"
+version = "0.15.3"
 default-features = false
 features = [ "http-listener" ]
 
 [dependencies.moka]
-version = "0.11.2"
+version = "0.12.8"
 features = [ "future" ]
 
 [dependencies.poise]
@@ -79,9 +82,9 @@ version = "1.26.0"
 features = [ "macros", "signal", "rt-multi-thread" ]
 
 [dependencies.reqwest]
-version = "0.11.14"
+version = "0.12.5"
 default-features = false
-features = [ "json", "rustls", "rustls-tls", "hyper-rustls", "tokio-rustls" ]
+features = [ "json", "rustls-tls", "http2" ]
 
 [dev-dependencies]
 ctor = "0.2.3"

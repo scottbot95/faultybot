@@ -105,32 +105,3 @@ enum LLMModel {
 enum LLMModelOld {
     Table,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test() {
-        let stmt = Table::alter()
-            .table(Persona::Table)
-            .modify_column(
-                ColumnDef::new(Persona::Model)
-                    // .enumeration(LLMModel::Table, LLMModel::iter().skip(1))
-                    // .default(None)
-                    .extra("ALTER COLUMN model DROP DEFAULT")
-                    // .extra("ALTER COLUMN model TYPE llm_model USING model::text::status_enum")
-            )
-            .to_string(PostgresQueryBuilder);
-
-        println!("{}", stmt);
-
-        let stmt = Query::update()
-            .table(Persona::Table)
-            .value(Persona::Model,  Expr::cust("'gpt-3.5-turbo'"))
-            .and_where(Expr::col(Persona::Model).ne(Expr::col(LLMModel::Gpt35Turbo).as_enum(LLMModel::Table)))
-            .to_string(PostgresQueryBuilder);
-
-        println!("{}", stmt);
-    }
-}

@@ -1,6 +1,6 @@
 use std::fmt::Write;
 use crate::gpt::Chat;
-use metrics::{histogram, increment_counter};
+use metrics::{histogram, counter};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,7 +28,7 @@ pub async fn on_error(error: poise::FrameworkError<'_, Data, Error>) -> Result<(
             .await?;
         }
         error => {
-            increment_counter!("errors_total");
+            counter!("errors_total").increment(1);
             poise::builtins::on_error(error).await?
         }
     };
@@ -44,12 +44,12 @@ where
     let metric_labels = audit_info.as_metric_labels();
     match error {
         FaultyBotError::User(error) => {
-            increment_counter!("user_errors_total", &metric_labels);
+            counter!("user_errors_total", &metric_labels).increment(1);
             let error = error.to_string();
             send_message(error).await?;
         }
         _ => {
-            increment_counter!("errors_total", &metric_labels);
+            counter!("errors_total", &metric_labels).increment(1);
             // Any other error means something went wrong while executing the command
             // Apologize to user and log
             tracing::error!("An error occured in a command: {}", error);
@@ -173,7 +173,7 @@ impl Handler {
             .unwrap_or_else(|| new_message.author.name.clone().into_string());
 
         let metric_labels = AuditInfo::from(&new_message).as_metric_labels();
-        increment_counter!("gpt_requests_total", &metric_labels);
+        counter!("gpt_requests_total", &metric_labels).increment(1);
 
         debug!(
             "Received message from {}: `{}`",
@@ -183,18 +183,18 @@ impl Handler {
         let result = Self::reply_with_gpt_completion(ctx.serenity_context, persona, new_message).await;
 
         if let Err(err) = result {
-            increment_counter!("gpt_errors_total", &metric_labels);
+            counter!("gpt_errors_total", &metric_labels).increment(1);
             error!("Failed to send reply: {}", err);
         } else {
-            increment_counter!("gpt_responses_total", &metric_labels);
+            counter!("gpt_responses_total", &metric_labels).increment(1);
         }
 
         let delay =
             serenity::Timestamp::now().fixed_offset() - msg_sent.fixed_offset();
         let delay = delay.to_std().unwrap(); // duration can never be negative unless users send message in the future
         let duration = start.elapsed();
-        histogram!("gpt_response_seconds", duration.as_secs_f64(), &metric_labels);
-        histogram!("gpt_response_delay_seconds", delay.as_secs_f64(), &metric_labels);
+        histogram!("gpt_response_seconds", &metric_labels).record(duration.as_secs_f64());
+        histogram!("gpt_response_delay_seconds", &metric_labels).record(delay.as_secs_f64());
 
         {
             self.cooldowns.write().await.start_cooldown(cd_ctx);

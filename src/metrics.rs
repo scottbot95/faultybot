@@ -1,5 +1,5 @@
 use crate::settings::config::FaultybotConfig;
-use metrics::{describe_counter, describe_histogram, histogram, increment_counter, NoopRecorder};
+use metrics::{counter, describe_counter, describe_histogram, histogram, NoopRecorder};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_statsd::StatsdBuilder;
 use metrics_util::MetricKindMask;
@@ -29,7 +29,7 @@ pub(crate) fn init_metrics(settings: &FaultybotConfig) {
         // Nothing (yet?)
     } else {
         warn!("No metrics recorder specified, defaulting to NoopRecorder");
-        metrics::set_recorder(&NoopRecorder).expect("Failed to install NoopRecorder");
+        metrics::set_global_recorder(NoopRecorder).expect("Failed to install NoopRecorder");
     }
 }
 
@@ -42,7 +42,7 @@ pub(crate) fn periodic_metrics(cache: Arc<serenity::Cache>, period: Duration) {
             interval.tick().await;
 
             let guild_count = cache.guild_count();
-            histogram!("guilds_in_cache", guild_count as f64);
+            histogram!("guilds_in_cache").record(guild_count as f64);
         }
     });
 }
@@ -57,7 +57,7 @@ pub async fn record_command_start(ctx: crate::Context<'_>) {
         ("command_name", ctx.command().qualified_name.clone())
     ]);
 
-    increment_counter!("command_executions_total", &labels);
+    counter!("command_executions_total", &labels).increment(1);
 
     ctx.set_invocation_data(CommandInvocationData {
         start,
@@ -72,7 +72,7 @@ pub async fn record_command_completion(ctx: crate::Context<'_>) {
 
     let duration = invocation_data.start.elapsed();
 
-    histogram!("command_execution_seconds", duration.as_secs_f64(), &invocation_data.labels);
+    histogram!("command_execution_seconds", &invocation_data.labels).record(duration.as_secs_f64());
 }
 
 /// We register these metrics, which gives us a chance to specify a description for them.  The
@@ -149,7 +149,7 @@ fn install_statsd_recorder(settings: &FaultybotConfig) -> Result<bool, Box<dyn E
         .histogram_is_timer()
         .build(None)?;
 
-    metrics::set_boxed_recorder(Box::new(recorder))?;
+    metrics::set_global_recorder(recorder)?;
 
     Ok(true)
 }
